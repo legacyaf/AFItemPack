@@ -39,20 +39,10 @@ DayZ Tools uses a virtual `P:` drive as the root of all mod files.
 DayZ wants `.paa` textures with specific name endings. The source PNGs are in
 `models/jerrycan_hauler/lowpoly/textures/`.
 
-1. Resize the PNGs to **2048 x 2048** in any image editor (4096 works but is heavy for a
-   backpack). Sizes must be a power of two.
-2. Save them into `P:\AFItemPack\JerrycanHauler\data\` with these names:
-
-   | Source PNG | Save as | Meaning |
-   |---|---|---|
-   | `texture_0_base_color.png` | `jerrycan_hauler_co.png` | colour |
-   | `texture_0_normal.png` | `jerrycan_hauler_nohq.png` | normal map |
-   | see step 3 | `jerrycan_hauler_smdi.png` | shininess |
-
-3. Build the `_smdi` image: start with a white image for the red channel, put the
-   **metallic** map in the green channel, and the **inverted roughness** map in the blue
-   channel. (In GIMP: Colors > Components > Compose.) If that is too fiddly for a first
-   pass, use a flat image with RGB 255, 60, 60 - the pack will just look evenly matte.
+1. Steps 1-3 are already done: `AFItemPack/JerrycanHauler/data/` in this repository holds
+   `jerrycan_hauler_co.png` (colour), `jerrycan_hauler_nohq.png` (normal map) and
+   `jerrycan_hauler_smdi.png` (shininess, built from the metallic and roughness maps),
+   all resized to 2048 x 2048. They arrive on `P:` when you copy the folder in Part 2.
 4. Convert each PNG to PAA: in the DayZ Tools launcher open **ImageToPAA** (or open the PNG in
    **TexView 2** and File > Save As `.paa`). The name endings (`_co`, `_nohq`, `_smdi`) tell
    the converter which compression to use, so keep them.
