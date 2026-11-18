@@ -1,1 +1,4 @@
 meshy_output/
+# Raw Meshy exports exceed the 100 MB GitHub file limit
+models/**/*.glb
+models/**/*.fbx
