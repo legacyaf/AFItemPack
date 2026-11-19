@@ -24,17 +24,45 @@ CAPE = {
     "HEM_Y": 0.255,         # distance behind the spine line at the hem
     "WRAP": 0.012,          # how far the side edges curve toward the wearer at the hem (none at the top)
     "FOLD_DEPTH_TOP": 0.003,
-    "FOLD_DEPTH_HEM": 0.026,
+    "FOLD_DEPTH_HEM": 0.016,   # 0.026 with even folds read as corrugated sheet when the cape was seen at an angle
     "THICKNESS": 0.004,
     "COLLAR": ((0.010, 0.016), (0.022, 0.028)),   # rolled top edge: rows (toward the wearer, up)
-    "BLEND_Z": (0.52, 1.40),  # bone mix: all hips at the first height, all upper back at the second
+    # Bone mix by height. Above BLEND_Z[1] the cloth is all upper back; down to BLEND_Z[0] it
+    # fades to the hips; below LEG_Z[0] it fades toward the thighs (left half to the left
+    # thigh, right half to the right), reaching LEG_SHARE at LEG_Z[1] and below.
+    # History: an even upper-back-to-hips mix over the whole length (0.52-1.40) stood well but
+    # moved like a board: it tented when crouching and hovered over the legs when prone.
+    "BLEND_Z": (1.05, 1.40),
+    "LEG_Z": (0.95, 0.70),
+    "LEG_SHARE": 0.6,
 }
 
 
-def cape_blend(z):
-    """Share of the upper-back bone at height z (the rest is the hips)."""
+CAPE_BONES = ("Spine3", "Pelvis", "LeftUpLeg", "RightUpLeg")
+
+
+def cape_weights(x, z):
+    """Bone weights of the cape's cloth at (x, z), as {bone: share}; +X is the character's left.
+    The vest pack's back uses the same function so the two deform together."""
     lo, hi = CAPE["BLEND_Z"]
-    return min(1.0, max(0.0, (z - lo) / (hi - lo)))
+    upper = min(1.0, max(0.0, (z - lo) / (hi - lo)))
+    top, bottom = CAPE["LEG_Z"]
+    legs = CAPE["LEG_SHARE"] * min(1.0, max(0.0, (top - z) / (top - bottom)))
+    # Left/right split fades across the whole width: split over the middle 30 cm only, the two
+    # halves parted at the hem when prone and one half stuck forward under the raised thigh when crouched.
+    left = min(1.0, max(0.0, 0.5 + x / 0.60))
+    weights = {"Spine3": upper, "Pelvis": 1.0 - upper - legs, "LeftUpLeg": legs * left, "RightUpLeg": legs * (1 - left)}
+    return {bone: share for bone, share in weights.items() if share > 1e-4}
+
+
+def set_weights(obj, weights_of):
+    """Write bone weights to an object's vertex groups; weights_of(vertex) returns {bone: share}."""
+    groups = {}
+    for v in obj.data.vertices:
+        for bone, share in weights_of(v).items():
+            if bone not in groups:
+                groups[bone] = obj.vertex_groups.new(name=bone)
+            groups[bone].add([v.index], share, 'REPLACE')
 
 
 def cape_centre_y(t):

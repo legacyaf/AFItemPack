@@ -29,8 +29,8 @@ the top of the build script.
   pack sits **under the Field Cape with at least 6 mm to spare**. The limit is the cape's own
   shape (`tools/p3d_common.py`), and `tools/check_cape_clearance.py` tests every LOD of the
   pack against every LOD of the cape for intersecting triangles; `build.ps1` fails if there are any.
-- Weights the back of the pack exactly like the cape (`Spine3` to `Pelvis` over the cape's
-  length) so the two move together; the front follows `Spine3` at the chest and `Pelvis` at
+- Weights the back of the pack exactly like the cape (`p3d.cape_weights`) so the two move
+  together; the front follows `Spine3` at the chest and `Pelvis` at
   the hips.
 - Derives visual LODs 2-8 (about 5,600 / 2,800 / 1,100 / 440 / 220 / 80 / 30 triangles) from
   LOD 1 (11,200). LODs 6-8 are only a silhouette for far distances.
@@ -49,11 +49,11 @@ photographs each from four sides.
 
 ## Known gaps
 
-- Checked on standing characters only, not while moving, crouching or prone.
+- Checked standing, crouched, prone, jogging and sprinting with the cape on
+  (`capture_tour.ps1 -Mission AFMove`): the pack stayed under the cape in every picture.
+  That is judged by eye from four sides per pose; the triangle test only covers the rest pose.
+  When crouched the hip pouches press into the thighs.
 - The hands of a standing character touch the outer hip pouches.
-- The no-intersection test is done on the models as built (standing rest pose). In other
-  poses the back of the pack and the cape share bone weights, so they should stay apart, but
-  that was only looked at in the standing idle stance.
 - The concept's bedroll is gone and the back pack is a flat panel; the 60 slots are carried
   visually by the front pouches.
 - `_f.p3d` is the same mesh as `_m.p3d`.

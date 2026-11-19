@@ -24,8 +24,10 @@ and the textures are all generated from the numbered settings at the top of
 - The body shape was measured in game (the `[AFMeasure]` lines printed by the `AFCape` test
   mission) and the cloth is placed 6-10 cm behind it, which leaves room for the Field Vest Pack's back
   panel underneath (the cape's shape is shared with that build in `tools/p3d_common.py`).
-- The cloth follows the upper back (`Spine3`) at the shoulders and the hips (`Pelvis`) at the
-  hem, mixed evenly in between, so it hangs in one curve when the chest turns or leans.
+- The cloth follows the upper back (`Spine3`) at the shoulders, fades to the hips (`Pelvis`)
+  by the waist, and below the seat is shared with the thighs (`LeftUpLeg`, `RightUpLeg`, up
+  to 60%, left half to the left thigh). An earlier even mix of upper back and hips stood well
+  but moved like a board: it tented when crouching and hovered over the legs when prone.
 - Visual LODs 1-7 (about 5,600 / 2,200 / 800 / 370 / 110 / 40 / 16 triangles) and a
   first-person LOD. LODs 5-7 are flat sheets without folds, cords or clasp, for far distances.
 
@@ -43,8 +45,11 @@ photographs each from four sides, then the ground model and the inventory screen
 
 ## Known gaps
 
-- Checked on standing characters only. The cape is not simulated cloth: it will pass through
-  the legs when crouching or sitting and through the ground when prone.
+- The cape is skinned, not simulated cloth. Checked standing, crouched, prone, jogging and
+  sprinting (`capture_tour.ps1 -Mission AFMove`): it drapes over the back and legs in all of
+  them, but the hem corners stick out as flat tabs when a thigh swings far (sprint, crouch),
+  a heel can pass through the hem mid-stride, and when prone the cloth hinges at the seat
+  instead of lying smoothly. Sitting, swimming, ladders and vehicles were not looked at.
 - Any backpack other than the Field Vest Pack passes through the upper part of the cape.
 - `_f.p3d` is the same mesh as `_m.p3d`.
 - Never looked at from far away (lower LODs) or in first person.

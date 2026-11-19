@@ -45,9 +45,8 @@ FOLD_DEPTH_TOP = p3d.CAPE["FOLD_DEPTH_TOP"]
 FOLD_DEPTH_HEM = p3d.CAPE["FOLD_DEPTH_HEM"]
 HEM_RAGGED = 0.012     # the hem is uneven by up to this much
 THICKNESS = p3d.CAPE["THICKNESS"]
-# Bone weights: fully the upper back above BLEND_Z[1], fully the hips below BLEND_Z[0], a straight-line mix between. In the idle stance the chest is turned and leaned against the hips, so a short or eased blend shows as a kink where it ends; mixing evenly over the whole length gives one gentle curve.
-UPPER_BONE, LOWER_BONE = "Spine3", "Pelvis"
-BLEND_Z = p3d.CAPE["BLEND_Z"]
+# Bone weights of the cloth come from p3d.cape_weights (upper back, hips, thighs by height);
+# the collar, cords and clasp are rigid on the upper back.
 # Shoulder cords: centre line of the character's left cord from the cloth, over the shoulder,
 # to the clasp on the chest. The right one is its mirror image.
 CORD_PATH = ((0.110, 0.175, 1.505), (0.094, 0.070, 1.537), (0.090, 0.000, 1.540), (0.085, -0.060, 1.487),
@@ -206,7 +205,8 @@ def cloth_point(u, t, folds=True):
     y -= WRAP * u * u * t   # none at the top, where the corners must stay clear of the shoulders
     depth = FOLD_DEPTH_TOP + (FOLD_DEPTH_HEM - FOLD_DEPTH_TOP) * t
     if folds:
-        y += depth * math.cos(FOLDS * math.pi * u)
+        # Uneven folds: an even cosine read as corrugated sheet.
+        y += depth * math.cos(FOLDS * math.pi * u) * (0.65 + 0.35 * math.cos(2.3 * math.pi * u + 1.0))
     # Folds gather the cloth, so the hem is a little narrower where they are deep.
     x = u * half * (1 - 0.06 * t)
     z += HEM_RAGGED * t * t * math.sin(u * 23.0) * math.cos(u * 7.0)
@@ -214,8 +214,6 @@ def cloth_point(u, t, folds=True):
 
 
 def add_cloth(b, cols, rows):
-    def upper_weight(z):
-        return min(1.0, max(0.0, (z - BLEND_Z[0]) / (BLEND_Z[1] - BLEND_Z[0])))
 
     # Rows down the cloth. With few rows, one is always put at the shoulder blades, where the
     # cloth stands furthest off the back: evenly spaced, a 2- or 3-row LOD cut straight from the
@@ -240,7 +238,7 @@ def add_cloth(b, cols, rows):
             for i in range(cols + 1):
                 p = cloth_point(-1 + 2 * i / cols, ts[j], cols >= FOLDS_MIN_COLUMNS)
                 p.y += shift
-                row.append(b.vert(p, upper_weight(p.z)))
+                row.append(b.vert(p, None))   # None: weighted by position, see below
             grid.append(row)
         total = rows + len(COLLAR)
         for j in range(total):
@@ -360,13 +358,8 @@ for resolution, cols, rows, segments in LODS:
         add_clasp(b, 12 if resolution < 3 else 6)
     obj = to_object(b, "cape_worn_lod%d" % resolution)
     mark_lod(obj, LOD_VISUAL, resolution)
-    upper = obj.vertex_groups.new(name=UPPER_BONE)
-    lower = obj.vertex_groups.new(name=LOWER_BONE)
-    for index, weight in enumerate(b.weights):
-        if weight > 0:
-            upper.add([index], weight, 'REPLACE')
-        if weight < 1:
-            lower.add([index], 1 - weight, 'REPLACE')
+    rigid = b.weights
+    p3d.set_weights(obj, lambda v: {"Spine3": 1.0} if rigid[v.index] is not None else p3d.cape_weights(v.co.x, v.co.z))
     if resolution == 1:
         first_person = obj.a3ob_properties_object.copies.add()
         first_person.lod = LOD_VIEW_PILOT

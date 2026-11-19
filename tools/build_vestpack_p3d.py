@@ -210,16 +210,18 @@ if min(gaps) < CAPE_CLEARANCE - 1e-6:
     raise SystemExit("the vest pack reaches the cape")
 vest.name = "vestpack_worn_lod1"
 p3d.mark_lod(vest, p3d.LOD_VISUAL, 1)
-upper = vest.vertex_groups.new(name=UPPER_BONE)
-lower = vest.vertex_groups.new(name=LOWER_BONE)
-for v in vest.data.vertices:
+
+
+def vest_weights(v):
     front = min(1.0, max(0.0, (v.co.z - BLEND_Z[0]) / (BLEND_Z[1] - BLEND_Z[0])))
     back = min(1.0, max(0.0, (v.co.y - WEIGHT_Y[0]) / (WEIGHT_Y[1] - WEIGHT_Y[0])))
-    w = front + (p3d.cape_blend(v.co.z) - front) * back
-    if w > 0:
-        upper.add([v.index], w, 'REPLACE')
-    if w < 1:
-        lower.add([v.index], 1 - w, 'REPLACE')
+    weights = {UPPER_BONE: front * (1 - back), LOWER_BONE: (1 - front) * (1 - back)}
+    for bone, share in p3d.cape_weights(v.co.x, v.co.z).items():
+        weights[bone] = weights.get(bone, 0.0) + share * back
+    return {bone: share for bone, share in weights.items() if share > 1e-4}
+
+
+p3d.set_weights(vest, vest_weights)
 p3d.add_copy(vest, p3d.LOD_VIEW_PILOT)   # first person uses the full-detail mesh
 p3d.add_lower_lods(vest, "vestpack_worn", LOD_RATIOS)
 # Reducing a mesh moves its vertices a little; put the lower LODs back inside the limit too.
