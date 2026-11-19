@@ -1,0 +1,39 @@
+[h2]Version 0.3.0[/h2]
+
+[h3]New: Field Cape (AF_Cape, belt slot)[/h3]
+[list]
+[*]Fully procedural mesh: cloth, collar roll, shoulder cords and clasp are generated in Blender from a parametric profile (Catmull-Rom cords, cosine fold field that deepens toward the hem), so every LOD is rebuilt from the same curve instead of decimated
+[*]7 visual LODs: 5,600 / 2,200 / 800 / 370 / 110 / 40 / 16 tris, plus a first-person LOD. The coarse LODs keep an edge loop pinned at the shoulder blades so the silhouette does not collapse into the back
+[*]Fitted to the character from in-game measurements: ray casts against the survivor's hit geometry gave back, chest and shoulder profiles, and the cloth is offset from those
+[*]Two-bone linear skin (Spine3 to Pelvis) spread over the full length of the cloth, so it hangs as one curve when the torso twists or leans instead of kinking at the hips
+[*]Double-sided with a separate lining shell; procedural 1k colour, normal and SMDI maps
+[/list]
+
+[h3]New: Field Vest Pack (AF_VestPack, backpack slot, 60 slots)[/h3]
+[list]
+[*]Load-bearing vest silhouette carried in the backpack slot, so the vest slot stays free
+[*]Non-uniform fit (0.78 / 0.96 / 0.75) to the measured torso, with the hip pouches narrowed to clear the arms
+[*]Built to be worn under the cape with zero intersection: the pack body is compressed against the cape's own profile with a 6 mm margin, and the back shares the cape's skin weights so the two deform together
+[*]The build runs a BVH triangle-overlap test of every vest pack LOD against every cape LOD and fails if a single pair intersects
+[*]8 visual LODs: 11,200 / 5,600 / 2,800 / 1,100 / 440 / 220 / 80 / 30 tris
+[/list]
+
+[h3]Jerrycan Hauler[/h3]
+[list]
+[*]LOD chain extended from 5 to 8 levels: 14,700 / 7,300 / 4,600 / 1,500 / 600 / 230 / 90 / 40 tris. Edge-collapse for the near levels, vertex clustering with a bisected merge distance for the far ones
+[*]Long guns now seat in the scabbard: the weapon proxy is rotated a quarter turn about the barrel axis and moved into the sleeve
+[*]Scabbard shortened to an upper sleeve with a clean bisected edge, so short and long guns both read correctly
+[/list]
+
+[h3]Pipeline[/h3]
+[list]
+[*]All three items build headless from Python in Blender and export through Arma 3 Object Builder; fit values are named parameters, not hand edits
+[*]Each worn model ships pristine, damaged and ruined materials
+[/list]
+
+[h3]Known limits[/h3]
+[list]
+[*]The cape is skinned, not simulated: it will pass through the legs when crouching
+[*]Fit and clearance were verified on standing characters; movement poses were not checked
+[*]The female models reuse the male mesh
+[/list]
