@@ -22,7 +22,8 @@ and the textures are all generated from the numbered settings at the top of
 ## How it is fitted
 
 - The body shape was measured in game (the `[AFMeasure]` lines printed by the `AFCape` test
-  mission) and the cloth is placed 3-5 cm outside it.
+  mission) and the cloth is placed 6-10 cm behind it, which leaves room for the Field Vest Pack's back
+  panel underneath (the cape's shape is shared with that build in `tools/p3d_common.py`).
 - The cloth follows the upper back (`Spine3`) at the shoulders and the hips (`Pelvis`) at the
   hem, mixed evenly in between, so it hangs in one curve when the chest turns or leans.
 - Visual LODs 1-4 (about 5,400 / 2,100 / 800 / 350 triangles) and a first-person LOD.
@@ -35,14 +36,15 @@ photographs each from four sides, then the ground model and the inventory screen
 - Goes into the belt slot on male and female characters.
 - Hangs outside the body over a T-shirt, M65 jacket, Gorka jacket with plate carrier, wool
   coat and hunting jacket.
-- Worn with an Alice pack: the pack sits over the cape and the cape shows below it.
+- Worn with the Field Vest Pack: the pack is entirely under the cape. Worn with an Alice
+  pack: the pack passes through the cape and the cape shows below it.
 - Damaged and ruined looks.
 
 ## Known gaps
 
 - Checked on standing characters only. The cape is not simulated cloth: it will pass through
   the legs when crouching or sitting and through the ground when prone.
-- A backpack passes through the upper part of the cape.
+- Any backpack other than the Field Vest Pack passes through the upper part of the cape.
 - `_f.p3d` is the same mesh as `_m.p3d`.
 - Never looked at from far away (lower LODs) or in first person.
 - The ground model was only seen in tall grass and as the inventory icon.

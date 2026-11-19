@@ -18,35 +18,43 @@ import bpy
 import numpy as np
 from mathutils import Vector
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import p3d_common as p3d  # noqa: E402
+
 # ---- fit settings (metres; Z up, the character faces -Y, +X is the character's left) ----
 # Measured in game on a standing male in a T-shirt (testmission AFCape, [AFMeasure] lines):
 # the back is 0.11 behind the spine line at 1.50, 0.15-0.19 at the shoulder blades (1.25-1.45),
 # 0.12 at the waist (1.10), 0.14 at the seat (0.90); the shoulder ridge is 1.49-1.50 high
 # 0.12 from the centre. A first cape with BLADE_Y 0.17 had its upper half inside the body.
-COLLAR = ((0.010, 0.016), (0.022, 0.028))   # rolled top edge: rows (toward the wearer, up)
-TOP_Z = 1.52           # top edge of the cloth at the back of the neck
-TOP_DROP = 0.05        # how much lower the top edge is at the shoulders than at the neck
-HEM_Z = 0.52           # bottom edge (just below the knee)
-HALF_WIDTH_TOP = 0.17  # half the width at the top edge (wider and the corners meet the shoulder joints, which move)
-HALF_WIDTH_HEM = 0.33  # half the width at the hem
-NECK_Y = 0.17          # distance behind the spine line at the top edge (0.135 let the shoulder blades show through)
-BLADE_Z = 1.41         # height of the shoulder blades, where the cloth stands furthest off
-BLADE_Y = 0.225        # distance behind the spine line there
-HEM_Y = 0.235          # distance behind the spine line at the hem
-WRAP = 0.012           # how far the side edges curve forward, toward the wearer
+# The cloth's own shape lives in p3d_common.CAPE, where the vest pack build reads it too.
+# With NECK_Y 0.17 / BLADE_Y 0.225 / HEM_Y 0.235 the cape fitted a bare back but left no room
+# for the vest pack's back panel under it; it now stands 2-2.5 cm further off.
+COLLAR = p3d.CAPE["COLLAR"]
+TOP_Z = p3d.CAPE["TOP_Z"]
+TOP_DROP = p3d.CAPE["TOP_DROP"]
+HEM_Z = p3d.CAPE["HEM_Z"]
+HALF_WIDTH_TOP = p3d.CAPE["HALF_WIDTH_TOP"]   # wider and the corners meet the shoulder joints, which move
+HALF_WIDTH_HEM = p3d.CAPE["HALF_WIDTH_HEM"]
+NECK_Y = p3d.CAPE["NECK_Y"]   # 0.135 let the shoulder blades show through
+BLADE_Z = p3d.CAPE["BLADE_Z"]
+BLADE_Y = p3d.CAPE["BLADE_Y"]
+HEM_Y = p3d.CAPE["HEM_Y"]
+WRAP = p3d.CAPE["WRAP"]
 FOLDS = 5              # vertical folds across the cloth
-FOLD_DEPTH_TOP = 0.003
-FOLD_DEPTH_HEM = 0.026
+FOLD_DEPTH_TOP = p3d.CAPE["FOLD_DEPTH_TOP"]
+FOLD_DEPTH_HEM = p3d.CAPE["FOLD_DEPTH_HEM"]
 HEM_RAGGED = 0.012     # the hem is uneven by up to this much
-THICKNESS = 0.004
+THICKNESS = p3d.CAPE["THICKNESS"]
 # Bone weights: fully the upper back above BLEND_Z[1], fully the hips below BLEND_Z[0], a straight-line mix between. In the idle stance the chest is turned and leaned against the hips, so a short or eased blend shows as a kink where it ends; mixing evenly over the whole length gives one gentle curve.
 UPPER_BONE, LOWER_BONE = "Spine3", "Pelvis"
-BLEND_Z = (0.52, 1.40)
+BLEND_Z = p3d.CAPE["BLEND_Z"]
 # Shoulder cords: centre line of the character's left cord from the cloth, over the shoulder,
 # to the clasp on the chest. The right one is its mirror image.
-CORD_PATH = ((0.140, 0.150, 1.500), (0.125, 0.060, 1.517), (0.115, 0.000, 1.512), (0.100, -0.045, 1.475),
-             (0.060, -0.100, 1.430), (0.0, -0.125, 1.395))
-CORD_HALF_WIDTH = 0.020
+CORD_PATH = ((0.110, 0.175, 1.505), (0.094, 0.070, 1.537), (0.090, 0.000, 1.540), (0.085, -0.060, 1.487),
+             (0.055, -0.105, 1.440), (0.0, -0.125, 1.395))
+# The cords run close to the neck (9 cm from the centre) and are 3 cm wide so they pass inside
+# the vest pack's shoulder straps, which start 12 cm from the centre; at 10-14 cm they crossed them.
+CORD_HALF_WIDTH = 0.015
 CLASP_RADIUS = 0.027
 GROUND_MASS_KG = 0.6
 
@@ -192,7 +200,7 @@ def cloth_point(u, t):
         y = NECK_Y + (BLADE_Y - NECK_Y) * smooth(0, 1, t / blade_t)
     else:
         y = BLADE_Y + (HEM_Y - BLADE_Y) * (t - blade_t) / (1 - blade_t)
-    y -= WRAP * u * u
+    y -= WRAP * u * u * t   # none at the top, where the corners must stay clear of the shoulders
     depth = FOLD_DEPTH_TOP + (FOLD_DEPTH_HEM - FOLD_DEPTH_TOP) * t
     y += depth * math.cos(FOLDS * math.pi * u)
     # Folds gather the cloth, so the hem is a little narrower where they are deep.

@@ -1,4 +1,4 @@
-# Rebuilds the Jerrycan Hauler and cape models and packs AFItemPack.pbo into @AFItemPack\Addons.
+# Rebuilds the Jerrycan Hauler, cape and vest pack models and packs AFItemPack.pbo into @AFItemPack\Addons.
 # Close any DayZ that has this mod loaded first: it keeps the PBO locked.
 #   powershell -ExecutionPolicy Bypass -File tools\build.ps1            (models + pack)
 #   powershell -ExecutionPolicy Bypass -File tools\build.ps1 -PackOnly  (config/script changes only)
@@ -20,13 +20,17 @@ if (-not (Test-Path 'P:\')) { subst P: $workdrive }
 if (-not (Test-Path 'P:\AFItemPack\JerrycanHauler\config.cpp')) { throw 'P:\AFItemPack is missing (it should be a link to the repo folder).' }
 
 if (-not $PackOnly) {
-    foreach ($script in 'build_hauler_p3d.py', 'build_cape_p3d.py') {
+    foreach ($script in 'build_hauler_p3d.py', 'build_cape_p3d.py', 'build_vestpack_p3d.py') {
         & $blender -b --python (Join-Path $PSScriptRoot $script) -- $repo 2>&1 |
             Select-String -Pattern 'EXPORTED|Error|Traceback|Exception' | ForEach-Object Line
         if ($LASTEXITCODE -ne 0) { throw "Blender exited with code $LASTEXITCODE" }
     }
-    # The cape's textures are generated as PNG by its build script.
-    Get-ChildItem (Join-Path $repo 'AFItemPack\Cape\data') -Filter '*.png' | ForEach-Object {
+    # The vest pack must never intersect the cape: test the two built models against each other.
+    $check = & $blender -b --python (Join-Path $PSScriptRoot 'check_cape_clearance.py') -- $repo 2>&1 | Select-String -Pattern '^CLEAR|^OVERLAP'
+    $check | ForEach-Object Line
+    if (-not $check -or ($check | Where-Object { $_.Line -match '^OVERLAP' })) { throw 'The vest pack intersects the cape (or the check did not run).' }
+    # The cape's and vest pack's textures are written as PNG by their build scripts.
+    Get-ChildItem (Join-Path $repo 'AFItemPack\Cape\data'), (Join-Path $repo 'AFItemPack\VestPack\data') -Filter '*.png' | ForEach-Object {
         & (Join-Path $tools 'Bin\ImageToPAA\ImageToPAA.exe') $_.FullName ($_.FullName -replace '\.png$', '.paa') | Out-Null
         if (-not (Test-Path ($_.FullName -replace '\.png$', '.paa'))) { throw "ImageToPAA failed on $($_.Name)" }
     }

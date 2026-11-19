@@ -83,6 +83,30 @@ void MeasureBody(PlayerBase who, string name)
 		Print("[AFMeasure] " + name + " bone " + bone + " " + who.GetBonePositionMS(who.GetBoneIndexByName(bone)).ToString());
 }
 
+// Torso cross-sections: at each height, rays from all around aimed at the body's centre
+// line. Prints the hit point (x to the character's right, z forward). Arms are hit too.
+void MeasureRadial(PlayerBase who, string name)
+{
+	vector hit, dir;
+	int component;
+	for (float h = 0.80; h < 1.61; h += 0.025)
+	{
+		string line = "[AFMeasure] " + name + " ring h=" + h.ToString() + ":";
+		for (int k = 0; k < 24; k++)
+		{
+			float a = k * 15 * Math.DEG2RAD;
+			vector outside = who.ModelToWorld(Vector(Math.Sin(a) * 0.7, h, Math.Cos(a) * 0.7 - 0.03));
+			vector centre = who.ModelToWorld(Vector(0, h, -0.03));
+			if (DayZPhysics.RaycastRV(outside, centre, hit, dir, component, NULL, NULL, NULL, false, false, ObjIntersectFire))
+			{
+				vector p = who.WorldToModel(hit);
+				line = line + " " + (k * 15).ToString() + "=" + p[0].ToString() + "," + p[2].ToString();
+			}
+		}
+		Print(line);
+	}
+}
+
 void main()
 {
 	GetGame().GetWorld().SetDate(2026, 6, 15, 12, 0);
@@ -139,6 +163,8 @@ class CustomMission: MissionGameplay
 			m_AFMeasured = true;
 			MeasureBody(g_AFDummy.Get(0), "female_tshirt");
 			MeasureBody(g_AFDummy.Get(1), "male_tshirt");
+			MeasureRadial(g_AFDummy.Get(1), "male_tshirt");
+			MeasureRadial(g_AFDummy.Get(0), "female_tshirt");
 			Print("[AFMeasure] done");
 		}
 		int total = g_AFDummyPos.Count() * 4;
