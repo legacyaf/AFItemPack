@@ -165,8 +165,8 @@ def add_lower_lods(full_obj, name, ratios):
 
         weld = 1e-4
         if method == "cluster":
-            low, high = 1e-4, 0.25
-            for _ in range(16):
+            low, high = 1e-4, 1.0
+            for _ in range(20):
                 weld = (low + high) / 2
                 trial = clustered(full_obj.data, weld)
                 count = len(trial.faces)

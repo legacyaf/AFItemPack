@@ -171,7 +171,7 @@ class CustomMission: MissionGameplay
 			Print("[AFMeasure] done");
 		}
 		int total = g_AFDummyPos.Count() * 4;
-		if (total == 0 || m_AFTime < 12 || m_AFShot >= total + 2)
+		if (total == 0 || m_AFTime < 12 || m_AFShot >= total + 8)
 			return;
 
 		int shot = Math.Floor((m_AFTime - 12) / 2.5);
@@ -190,7 +190,19 @@ class CustomMission: MissionGameplay
 			from = target + "0.6 0.5 -0.7";
 			label = "ground";
 		}
-		else if (shot > total)
+		else if (shot > total && shot <= total + 6)
+		{
+			// Far LODs: the backs of mannequins 2 (no cape) and 3 (with cape) from 5, 10, 20, 40,
+			// 80 and 160 m, from behind and 20 degrees up.
+			float metres = 5 * Math.Pow(2, shot - total - 1);
+			target = (g_AFDummyPos.Get(1) + g_AFDummyPos.Get(2)) * 0.5;
+			target[1] = target[1] + 1.2;
+			from = target;
+			from[1] = from[1] + metres * 0.342;
+			from[2] = from[2] + metres * 0.940;
+			label = "dist_" + metres.ToString() + "m";
+		}
+		else if (shot > total + 6)
 		{
 			cam.SetFreezed(false);
 			cam.SetActive(false);

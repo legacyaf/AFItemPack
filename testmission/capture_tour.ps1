@@ -1,7 +1,7 @@
 # Starts the offline test and saves a picture of the DayZ window at every stop of the
 # mission's camera tour (see init.c). Pictures go to testmission\captures.
 # The window is read directly (PrintWindow), so other windows on top of it do not matter,
-# but it must not be minimised while this runs (about 2 minutes).
+# but it must not be minimised while this runs (2 to 5 minutes).
 #   capture_tour.ps1                  the Jerrycan Hauler line-up (mission AFTest)
 #   capture_tour.ps1 -Mission AFCape  the cape line-up
 param([string]$Mission = 'AFTest')
@@ -55,7 +55,7 @@ function Save-Window($name) {
 }
 
 $seen = @{}; $front = $false; $done = $false
-$deadline = (Get-Date).AddSeconds(240)
+$deadline = (Get-Date).AddSeconds(360)
 while ((Get-Date) -lt $deadline -and -not $done) {
     $log = Get-ChildItem (Join-Path $here 'profiles') -Filter 'script_*.log' -ErrorAction SilentlyContinue |
         Where-Object LastWriteTime -gt $start | Sort-Object LastWriteTime | Select-Object -Last 1

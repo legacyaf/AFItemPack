@@ -52,7 +52,9 @@ BLEND_Z = (0.90, 1.32)
 WEIGHT_Y = (0.05, 0.15)
 PACK_MIN_Y = 0.19               # behind this is the back: not narrowed with the hip pouches
 GROUND_MASS_KG = 2.2
-LOD_RATIOS = ((2, 0.50, "collapse"), (3, 0.25, "collapse"), (4, 0.10, "cluster"), (5, 0.04, "cluster"))
+# LODs 6-8 are for far distances: a few hundred triangles down to a few dozen.
+LOD_RATIOS = ((2, 0.50, "collapse"), (3, 0.25, "collapse"), (4, 0.10, "cluster"), (5, 0.04, "cluster"),
+              (6, 0.02, "cluster"), (7, 0.008, "cluster"), (8, 0.003, "cluster"))
 
 TEXTURE = r"AFItemPack\VestPack\data\vest_pack_co.paa"
 RVMAT = r"AFItemPack\VestPack\data\vest_pack.rvmat"

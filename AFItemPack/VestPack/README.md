@@ -28,11 +28,12 @@ the top of the build script.
 - Removes the bedroll and squeezes the pack body flat (22 cm down to about 3 cm) so the whole
   pack sits **under the Field Cape with at least 6 mm to spare**. The limit is the cape's own
   shape (`tools/p3d_common.py`), and `tools/check_cape_clearance.py` tests every LOD of the
-  pack against the cape for intersecting triangles; `build.ps1` fails if there are any.
+  pack against every LOD of the cape for intersecting triangles; `build.ps1` fails if there are any.
 - Weights the back of the pack exactly like the cape (`Spine3` to `Pelvis` over the cape's
   length) so the two move together; the front follows `Spine3` at the chest and `Pelvis` at
   the hips.
-- Derives visual LODs 2-5 (about 5,600 / 2,800 / 1,100 / 450 triangles) from LOD 1 (11,200).
+- Derives visual LODs 2-8 (about 5,600 / 2,800 / 1,100 / 440 / 220 / 80 / 30 triangles) from
+  LOD 1 (11,200). LODs 6-8 are only a silhouette for far distances.
 
 ## Tested offline
 
@@ -56,5 +57,6 @@ photographs each from four sides.
 - The concept's bedroll is gone and the back pack is a flat panel; the 60 slots are carried
   visually by the front pouches.
 - `_f.p3d` is the same mesh as `_m.p3d`.
-- LODs 4 and 5 are crude (merged vertices) and were never looked at in game; neither was
+- LODs 4 and up are crude (merged vertices). The pack is still drawn in the offline distance
+  shots (out to 160 m), but the low LODs were never inspected up close in game; neither was
   first person or the ground model up close.

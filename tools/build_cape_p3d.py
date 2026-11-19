@@ -59,7 +59,10 @@ CLASP_RADIUS = 0.027
 GROUND_MASS_KG = 0.6
 
 # Visual LODs: (resolution, columns across, rows down, cord segments).
-LODS = ((1, 32, 40, 20), (2, 20, 24, 10), (3, 12, 14, 5), (4, 8, 8, 5))
+# Visual LODs: (resolution, columns across, rows down, cord segments). The far LODs (5-7) have
+# no folds, cords or clasp (two-segment cords cut through the vest pack's shoulder straps): at that distance the cape is a flat green shape.
+LODS = ((1, 32, 40, 20), (2, 20, 24, 10), (3, 12, 14, 5), (4, 8, 8, 5), (5, 4, 5, 0), (6, 2, 3, 0), (7, 1, 2, 0))
+FOLDS_MIN_COLUMNS = 8   # fewer columns than this cannot show the folds, only alias them
 
 TEXTURE = r"AFItemPack\Cape\data\cape_co.paa"
 RVMAT = r"AFItemPack\Cape\data\cape.rvmat"
@@ -190,7 +193,7 @@ def uv_in(box, s, t):
     return (box[0] + (box[2] - box[0]) * s, box[1] + (box[3] - box[1]) * t)
 
 
-def cloth_point(u, t):
+def cloth_point(u, t, folds=True):
     """u: -1 (character's right edge) .. 1 (left edge); t: 0 (top) .. 1 (hem)."""
     top = TOP_Z - TOP_DROP * u * u
     z = top + (HEM_Z - top) * t
@@ -202,7 +205,8 @@ def cloth_point(u, t):
         y = BLADE_Y + (HEM_Y - BLADE_Y) * (t - blade_t) / (1 - blade_t)
     y -= WRAP * u * u * t   # none at the top, where the corners must stay clear of the shoulders
     depth = FOLD_DEPTH_TOP + (FOLD_DEPTH_HEM - FOLD_DEPTH_TOP) * t
-    y += depth * math.cos(FOLDS * math.pi * u)
+    if folds:
+        y += depth * math.cos(FOLDS * math.pi * u)
     # Folds gather the cloth, so the hem is a little narrower where they are deep.
     x = u * half * (1 - 0.06 * t)
     z += HEM_RAGGED * t * t * math.sin(u * 23.0) * math.cos(u * 7.0)
@@ -213,12 +217,20 @@ def add_cloth(b, cols, rows):
     def upper_weight(z):
         return min(1.0, max(0.0, (z - BLEND_Z[0]) / (BLEND_Z[1] - BLEND_Z[0])))
 
+    # Rows down the cloth. With few rows, one is always put at the shoulder blades, where the
+    # cloth stands furthest off the back: evenly spaced, a 2- or 3-row LOD cut straight from the
+    # neck to the waist, 4 cm inside the real cloth and through the vest pack under it.
+    if rows >= 12:
+        ts = [j / rows for j in range(rows + 1)]
+    else:
+        blade_t = (TOP_Z - BLADE_Z) / (TOP_Z - HEM_Z)
+        ts = [0.0] + [blade_t + (1 - blade_t) * j / (rows - 1) for j in range(rows)]
     for side, shift in ((1, 0.0), (-1, -THICKNESS)):   # outer face, then the lining
         grid = []
         for forward, up in reversed(COLLAR):   # rolled collar above the top edge
             row = []
             for i in range(cols + 1):
-                p = cloth_point(-1 + 2 * i / cols, 0)
+                p = cloth_point(-1 + 2 * i / cols, 0, cols >= FOLDS_MIN_COLUMNS)
                 p.y += shift - forward
                 p.z += up
                 row.append(b.vert(p, 1.0))
@@ -226,7 +238,7 @@ def add_cloth(b, cols, rows):
         for j in range(rows + 1):
             row = []
             for i in range(cols + 1):
-                p = cloth_point(-1 + 2 * i / cols, j / rows)
+                p = cloth_point(-1 + 2 * i / cols, ts[j], cols >= FOLDS_MIN_COLUMNS)
                 p.y += shift
                 row.append(b.vert(p, upper_weight(p.z)))
             grid.append(row)
@@ -343,8 +355,9 @@ bpy.ops.wm.read_homefile(use_empty=True)
 for resolution, cols, rows, segments in LODS:
     b = Builder()
     add_cloth(b, cols, rows)
-    add_cords(b, segments)
-    add_clasp(b, 12 if resolution < 3 else 6)
+    if segments:
+        add_cords(b, segments)
+        add_clasp(b, 12 if resolution < 3 else 6)
     obj = to_object(b, "cape_worn_lod%d" % resolution)
     mark_lod(obj, LOD_VISUAL, resolution)
     upper = obj.vertex_groups.new(name=UPPER_BONE)

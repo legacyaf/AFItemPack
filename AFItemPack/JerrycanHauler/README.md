@@ -32,6 +32,7 @@ at the top of `tools/build_hauler_p3d.py`.
 - Derives the lower LODs from the finished LOD 1 mesh (edge collapse for 2 and 3, vertex
   merging for 4 and 5).
 - Mirrors the hip belt to the wearer's side; in the source mesh it loops away from the body.
+- Cuts the bottom half off the leather scabbard, with a straight edge.
 - Replaces the left shoulder strap with a mirror of the right one, raises both by 5 cm and
   pushes the lower webbing outward so the straps clear the shoulders and ribs.
 - Weights the belt to `Pelvis` and everything else to `Spine3`.
@@ -47,18 +48,21 @@ at the top of `tools/build_hauler_p3d.py`.
 
 - `_f.p3d` is the same mesh as `_m.p3d`. It was checked on two female characters and fits,
   but it is not separately fitted.
-- Visual LODs 1-5 (about 14,700 / 7,300 / 4,600 / 1,500 / 600 triangles) and a first-person
-  LOD, generated automatically. LODs 4 and 5 are crude (merged vertices); at the ranges
-  where the pack was seen in the offline test (out to 160 m) it reads the same as a vanilla
-  pack beside it, but they were never inspected up close in game. No shadow LOD, as in the
+- Visual LODs 1-8 (about 14,700 / 7,300 / 4,600 / 1,500 / 600 / 230 / 90 / 40 triangles) and
+  a first-person LOD, generated automatically. LODs 4 and up are crude (merged vertices) and
+  6-8 are only a silhouette for far distances; the pack is still drawn in the offline distance
+  shots (out to 160 m), but which LOD the game shows at which range was not checked, and
+  none of them was inspected up close in game. No shadow LOD, as in the
   vanilla packs. LOD 1 is heavy for a backpack.
 - The damage look comes from the generic vanilla vest damage overlays, not from art made
   for this pack: damaged is a slight dulling, ruined is clearly darker and dirtier.
 - The jerrycan slot uses the vanilla gas-canister icon; there is no vanilla jerrycan icon.
 - Bulky tops partly swallow the hip belt (seen with the raincoat).
-- Long guns share one attachment point, so their height differs by model: rifles such as
-  the Mosin, SVD and SKS reach from about head height to the knee; the AKM and M4A1 sit
-  shorter. Tried: Mosin, MP-133, AKM, M4A1, SVD, Winchester 70, SKS, IZH-18.
+- The leather scabbard's bottom half is cut off (owner's choice), leaving a short upper
+  sleeve. Long guns go through it, stock up and underside to the rear, and hang free below.
+  They share one attachment point, so their height differs by model: short ones (AKM, M4A1)
+  show only their butt above the sleeve and their barrel below it; rifles such as
+  the Mosin, SVD and SKS reach from about head height to the knee. Tried: Mosin, MP-133, AKM, M4A1, SVD, Winchester 70, SKS, IZH-18.
 - Everything was checked on standing characters only, not while moving, crouching or prone.
 
 ## Gap test line-up

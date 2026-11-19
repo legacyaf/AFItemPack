@@ -26,7 +26,8 @@ and the textures are all generated from the numbered settings at the top of
   panel underneath (the cape's shape is shared with that build in `tools/p3d_common.py`).
 - The cloth follows the upper back (`Spine3`) at the shoulders and the hips (`Pelvis`) at the
   hem, mixed evenly in between, so it hangs in one curve when the chest turns or leans.
-- Visual LODs 1-4 (about 5,400 / 2,100 / 800 / 350 triangles) and a first-person LOD.
+- Visual LODs 1-7 (about 5,600 / 2,200 / 800 / 370 / 110 / 40 / 16 triangles) and a
+  first-person LOD. LODs 5-7 are flat sheets without folds, cords or clasp, for far distances.
 
 ## Tested offline
 

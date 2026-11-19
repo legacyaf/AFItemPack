@@ -68,6 +68,13 @@ STRAP_SIDE_Y_RAMP = (0.15, 0.25)
 STRAP_SIDE_Z_IN = (-0.62, -0.45)
 STRAP_SIDE_Z_OUT = (-0.15, 0.20)
 STRAP_Z_RAMP = (-0.20, 0.35)
+# The leather scabbard, in the worn model's coordinates: everything further right than MAX_X
+# and further back than MIN_Y between these heights. Its bottom half, below CUT_Z, is removed.
+SCABBARD_MAX_X = -0.205
+SCABBARD_MIN_Y = 0.135   # the brown panel still seen below the cut is the frame's own side (x about -0.19), not sleeve
+SCABBARD_BOTTOM_Z = 0.86
+SCABBARD_TOP_Z = 1.47
+SCABBARD_CUT_Z = 1.18
 GROUND_MASS_KG = 4.5
 
 TEXTURE = r"AFItemPack\JerrycanHauler\data\jerrycan_hauler_co.paa"
@@ -81,7 +88,10 @@ PROXY_DIR = r"\AFItemPack\JerrycanHauler\proxy"
 PROXIES = {
     "AF_Hauler_proxy_jerrycan": {"at": (0.0, 0.22, 1.28), "turn": ()},              # in the cradle, upright
     "AF_Hauler_proxy_shovel": {"at": (0.225, 0.18, 0.85), "turn": ()},              # left side, upright, blade up (at 1.20 the blade was above the head)
-    "AF_Hauler_proxy_weapon": {"at": (-0.245, 0.215, 1.33), "turn": (("Y", -90),)},  # in the scabbard, stock up (1.18: a Mosin hung to the shins; 1.46: long rifles stood 25 cm above the head)
+    # The scabbard is a leather sleeve on the character's right: x -0.275..-0.208, y 0.14..0.25, z 0.90..1.45.
+    # A long gun hangs from its barrel line with its body (grip, magazine) on one side of it. Turned
+    # only ("Y", -90), that side pointed outboard and the gun sat beside the sleeve, not in it.
+    "AF_Hauler_proxy_weapon": {"at": (-0.242, 0.165, 1.33), "turn": (("Z", -90), ("Y", -90))},  # stock up, underside to the rear (1.18: a Mosin hung to the shins; 1.46: long rifles stood 25 cm above the head)
 }
 
 # Lower-detail visual LODs: (resolution, share of the full triangle count, method).
@@ -92,7 +102,10 @@ PROXIES = {
 # and these LODs are only seen from far away.
 # LOD 3 asks collapse for 25% and gets its floor (about 32%), which is clean; a clustered
 # LOD 3 at 25% was visibly ragged.
-LOD_RATIOS = ((2, 0.50, "collapse"), (3, 0.25, "collapse"), (4, 0.10, "cluster"), (5, 0.04, "cluster"))
+# LODs 6-8 are for far distances: a few hundred triangles down to a few dozen, where the pack
+# is a handful of pixels. They keep the silhouette and average colour and nothing else.
+LOD_RATIOS = ((2, 0.50, "collapse"), (3, 0.25, "collapse"), (4, 0.10, "cluster"), (5, 0.04, "cluster"),
+              (6, 0.016, "cluster"), (7, 0.006, "cluster"), (8, 0.0025, "cluster"))
 
 LOD_VISUAL, LOD_VIEW_PILOT, LOD_GEOMETRY, LOD_VIEW_GEOMETRY, LOD_FIRE_GEOMETRY = "0", "2", "6", "14", "15"
 
@@ -208,6 +221,37 @@ def lift_straps(obj, scale):
     print("STRAPS verts raised", moved)
 
 
+def cut_scabbard(obj, to_worn):
+    """Cut the bottom half off the leather scabbard (the owner's choice: a gun then hangs from a
+    short upper sleeve with its barrel free, instead of running through a full-length one).
+
+    to_worn maps the object's current coordinates to the worn model's. The sleeve's faces are
+    split along the cut height first so the new bottom edge is straight.
+    """
+    inverse = to_worn.inverted()
+    obj.data.transform(to_worn)
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    belt = bm.verts.layers.int.get("belt")
+
+    def in_sleeve(v, low):
+        return (v.co.x < SCABBARD_MAX_X and v.co.y > SCABBARD_MIN_Y and low < v.co.z < SCABBARD_TOP_Z
+                and not (belt and v[belt]))
+
+    faces = [f for f in bm.faces if all(in_sleeve(v, SCABBARD_BOTTOM_Z) for v in f.verts)]
+    geom = list({e for f in faces for e in f.edges}) + faces + list({v for f in faces for v in f.verts})
+    bmesh.ops.bisect_plane(bm, geom=geom, plane_co=(0, 0, SCABBARD_CUT_Z), plane_no=(0, 0, 1))
+    lower = [f for f in bm.faces if all(in_sleeve(v, SCABBARD_BOTTOM_Z) for v in f.verts)
+             and f.calc_center_median().z < SCABBARD_CUT_Z]
+    bmesh.ops.delete(bm, geom=lower, context='FACES')
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.transform(inverse)
+    obj.data.update()
+    print("SCABBARD faces removed below the cut", len(lower))
+
+
 def belt_vertex_indices(obj):
     attr = obj.data.attributes.get("belt")
     return [i for i, d in enumerate(attr.data) if d.value] if attr else []
@@ -305,8 +349,8 @@ def add_lower_lods(pack, name, **proxy_args):
         weld = 1e-4
         if method == "cluster":
             # Bisect the merge distance until the triangle count is at or under the target.
-            low, high = 1e-4, 0.25
-            for _ in range(16):
+            low, high = 1e-4, 1.0
+            for _ in range(20):
                 weld = (low + high) / 2
                 trial = clustered(pack.data, weld)
                 count = len(trial.faces)
@@ -373,6 +417,7 @@ offset = Vector((-SRC_FRAME_CENTRE_X * s,
 # The offset puts the pack behind a +Y-facing character; then it is turned half a turn.
 worn_matrix = Matrix.Rotation(3.141592653589793, 4, 'Z') @ Matrix.Translation(offset) @ Matrix.Scale(s, 4)
 apply_matrix(pack, worn_matrix)
+cut_scabbard(pack, Matrix.Identity(4))
 pack.name = "hauler_worn_lod1"
 mark_lod(pack, LOD_VISUAL, 1)
 belt = set(belt_vertex_indices(pack))
@@ -405,6 +450,7 @@ mn, mx = bounds(pack)
 centre = Matrix.Translation((-(mn.x + mx.x) / 2, -(mn.y + mx.y) / 2, -mn.z))
 apply_matrix(pack, centre)
 ground_matrix = centre @ ground_matrix
+cut_scabbard(pack, worn_matrix @ ground_matrix.inverted())
 pack.name = "hauler_ground_lod1"
 mark_lod(pack, LOD_VISUAL, 1)
 add_proxies(pack, to_scene=ground_matrix @ worn_matrix.inverted())
