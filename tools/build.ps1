@@ -33,4 +33,16 @@ $p = Start-Process (Join-Path $tools 'Bin\AddonBuilder\AddonBuilder.exe') -Argum
 ) -RedirectStandardOutput $log -NoNewWindow -PassThru -Wait
 Get-Content $log | Select-String 'Build |ERROR' | ForEach-Object Line
 if ($p.ExitCode -ne 0 -or -not (Select-String -Path $log -Pattern 'Build Successful' -Quiet)) { throw "Addon Builder failed; see $log" }
-Get-Item (Join-Path $repo '@AFItemPack\Addons\AFItemPack.pbo') | Select-Object Name, Length, LastWriteTime
+
+# Re-sign: a rebuilt PBO no longer matches its old signature. The private key stays in
+# keys\ (not in git); without it the stale signature is removed and the PBO is left unsigned.
+$addons = Join-Path $repo '@AFItemPack\Addons'
+$key    = Join-Path $repo 'keys\AFItemPack.biprivatekey'
+Get-ChildItem $addons -Filter '*.bisign' | Remove-Item -Confirm:$false
+if (Test-Path $key) {
+    & (Join-Path $tools 'Bin\DsUtils\DSSignFile.exe') $key (Join-Path $addons 'AFItemPack.pbo')
+    if ($LASTEXITCODE -ne 0) { throw 'Signing failed.' }
+    New-Item -ItemType Directory -Force (Join-Path $repo '@AFItemPack\Keys') | Out-Null
+    Copy-Item (Join-Path $repo 'keys\AFItemPack.bikey') (Join-Path $repo '@AFItemPack\Keys\') -Force
+} else { Write-Warning 'keys\AFItemPack.biprivatekey not found; the PBO is unsigned.' }
+Get-ChildItem $addons | Select-Object Name, Length, LastWriteTime

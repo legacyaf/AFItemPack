@@ -1,0 +1,22 @@
+Allied Forces Item Pack
+
+Original Allied Forces items for DayZ. First item: the Jerrycan Hauler.
+
+[h2]Jerrycan Hauler[/h2]
+A welded rebar pack frame built to carry a jerrycan across the wastes.
+[list]
+[*]Backpack, 90 slots (10 x 9)
+[*]Mounts a jerrycan, a shovel and a long gun on the outside, each in its own slot and shown on the pack
+[*]Chemlight and radio slots
+[*]Damaged and ruined looks, male and female fit
+[/list]
+Class name: AF_JerrycanHauler
+
+[h2]Server owners[/h2]
+[list]
+[*]Copy Keys\AFItemPack.bikey to your server's keys folder and add @AFItemPack to -mod=
+[*]ServerFiles\af_itempack_types.xml holds the types.xml entry; see ServerFiles\README.txt
+[/list]
+
+[h2]Known limits[/h2]
+First release, tested offline on DayZ 1.30 with standing characters. Bulky coats can hide the hip belt. Long guns share one mount, so how high each sits differs by model.

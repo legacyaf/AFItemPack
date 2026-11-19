@@ -20,7 +20,8 @@ It has not been run on a server.
 Close DayZ, then run `tools\build.ps1` (add `-PackOnly` after config or script changes only).
 It needs DayZ Tools, Blender with the Arma 3 Object Builder add-on, and the `P:` work drive
 with `P:\AFItemPack` linked to this repository's `AFItemPack` folder. The PBO is written to
-`@AFItemPack\Addons`.
+`@AFItemPack\Addons` and signed with `keys\AFItemPack.biprivatekey` (kept out of git; without
+it the PBO is left unsigned). `workshop/` holds the Workshop preview picture and description.
 
 All fit numbers (pack height and position, strap lift, attachment points) are named settings
 at the top of `tools/build_hauler_p3d.py`.
