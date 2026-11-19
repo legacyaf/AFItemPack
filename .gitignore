@@ -3,3 +3,5 @@ meshy_output/
 models/**/*.glb
 models/**/*.fbx
 !models/**/lowpoly/*.glb
+# Leftovers of an interrupted P3D export
+*.p3d.*.temp
