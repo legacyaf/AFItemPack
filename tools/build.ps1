@@ -1,5 +1,5 @@
 # Rebuilds the Jerrycan Hauler models and packs AFItemPack.pbo into @AFItemPack\Addons.
-# Close DayZ first: a running game keeps the PBO locked.
+# Close any DayZ that has this mod loaded first: it keeps the PBO locked.
 #   powershell -ExecutionPolicy Bypass -File tools\build.ps1            (models + pack)
 #   powershell -ExecutionPolicy Bypass -File tools\build.ps1 -PackOnly  (config/script changes only)
 param([switch]$PackOnly)
@@ -11,7 +11,11 @@ $tools     = 'C:\Program Files (x86)\Steam\steamapps\common\DayZ Tools'
 $blender   = 'C:\Program Files\Blender Foundation\Blender 5.3\blender.exe'
 $temp      = Join-Path $env:TEMP 'AFItemPack_build'
 
-if (Get-Process DayZDiag_x64, DayZ_x64 -ErrorAction SilentlyContinue) { throw 'DayZ is running; close it first.' }
+$pbo = Join-Path $repo '@AFItemPack\Addons\AFItemPack.pbo'
+if (Test-Path $pbo) {
+    try { $lock = [IO.File]::Open($pbo, 'Open', 'ReadWrite', 'None'); $lock.Close() }
+    catch { throw 'AFItemPack.pbo is in use; close the DayZ that has the mod loaded first.' }
+}
 if (-not (Test-Path 'P:\')) { subst P: $workdrive }
 if (-not (Test-Path 'P:\AFItemPack\JerrycanHauler\config.cpp')) { throw 'P:\AFItemPack is missing (it should be a link to the repo folder).' }
 

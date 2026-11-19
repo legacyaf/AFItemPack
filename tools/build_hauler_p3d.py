@@ -84,7 +84,17 @@ PROXIES = {
     "AF_Hauler_proxy_weapon": {"at": (-0.245, 0.215, 1.33), "turn": (("Y", -90),)},  # in the scabbard, stock up (1.18: a Mosin hung to the shins; 1.46: long rifles stood 25 cm above the head)
 }
 
-LOD_VISUAL, LOD_GEOMETRY, LOD_VIEW_GEOMETRY, LOD_FIRE_GEOMETRY = "0", "6", "14", "15"
+# Lower-detail visual LODs: (resolution, share of the full triangle count, method).
+# The vanilla backpacks carry visual LODs 1-5 plus a first-person LOD and no shadow LOD;
+# same here. "collapse" is Blender's edge-collapse decimator, which keeps the shape best but
+# stalls near 4,600 triangles on this mesh (thin double-sided shells). "cluster" merges all
+# vertices closer than a distance, searched to hit the target; cruder, but it has no floor
+# and these LODs are only seen from far away.
+# LOD 3 asks collapse for 25% and gets its floor (about 32%), which is clean; a clustered
+# LOD 3 at 25% was visibly ragged.
+LOD_RATIOS = ((2, 0.50, "collapse"), (3, 0.25, "collapse"), (4, 0.10, "cluster"), (5, 0.04, "cluster"))
+
+LOD_VISUAL, LOD_VIEW_PILOT, LOD_GEOMETRY, LOD_VIEW_GEOMETRY, LOD_FIRE_GEOMETRY = "0", "2", "6", "14", "15"
 
 repo = sys.argv[sys.argv.index("--") + 1]
 glb = os.path.join(repo, "models", "jerrycan_hauler", "lowpoly", "jerrycan_hauler_15k.glb")
@@ -268,6 +278,69 @@ def add_proxies(lod_obj, to_scene=Matrix.Identity(4), bone=None):
             obj.vertex_groups.new(name=bone).add(range(3), 1.0, 'REPLACE')
 
 
+def add_lower_lods(pack, name, **proxy_args):
+    """Add decimated copies of the finished LOD 1 object as visual LODs 2-5.
+
+    The GLB mesh is split along every UV seam, which a decimator cannot collapse across,
+    so each copy is welded first. Vertex groups (bone weights) and UVs survive both steps.
+    """
+    full = len(pack.data.polygons)
+    def clustered(source, distance):
+        bm = bmesh.new()
+        bm.from_mesh(source)
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=distance)
+        bmesh.ops.dissolve_degenerate(bm, edges=bm.edges, dist=1e-6)
+        bmesh.ops.triangulate(bm, faces=bm.faces)
+        return bm
+
+    for resolution, ratio, method in LOD_RATIOS:
+        obj = pack.copy()
+        obj.data = pack.data.copy()
+        obj.name = "%s_lod%d" % (name, resolution)
+        bpy.context.scene.collection.objects.link(obj)
+        props = obj.a3ob_properties_object
+        props.resolution = resolution
+        props.copies.clear()
+
+        weld = 1e-4
+        if method == "cluster":
+            # Bisect the merge distance until the triangle count is at or under the target.
+            low, high = 1e-4, 0.25
+            for _ in range(16):
+                weld = (low + high) / 2
+                trial = clustered(pack.data, weld)
+                count = len(trial.faces)
+                trial.free()
+                if count > ratio * full:
+                    low = weld
+                else:
+                    high = weld
+            weld = high
+        bm = clustered(pack.data, weld)
+        welded = len(bm.faces)
+        bm.to_mesh(obj.data)
+        bm.free()
+        normals = obj.data.attributes.get("custom_normal")
+        if normals:
+            obj.data.attributes.remove(normals)
+
+        if method == "collapse":
+            modifier = obj.modifiers.new("decimate", 'DECIMATE')
+            modifier.ratio = min(1.0, ratio * full / max(welded, 1))
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            reduced = bpy.data.meshes.new_from_object(obj.evaluated_get(depsgraph),
+                                                      preserve_all_data_layers=True, depsgraph=depsgraph)
+            obj.modifiers.clear()
+            obj.data = reduced
+        # Clustering leaves sliver triangles that shade as dark spikes when smoothed.
+        for polygon in obj.data.polygons:
+            polygon.use_smooth = method == "collapse"
+        obj.data.update()
+        tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
+        print("LOD", obj.name, method, "triangles", tris, "of", full, "merge distance %.1f mm" % (weld * 1000))
+        add_proxies(obj, **proxy_args)
+
+
 def export_proxy_models():
     """The proxy models themselves are placeholders: one small triangle each."""
     os.makedirs(os.path.join(out_dir, "proxy"), exist_ok=True)
@@ -307,6 +380,11 @@ rest = [i for i in range(len(pack.data.vertices)) if i not in belt]
 pack.vertex_groups.new(name=WORN_BONE).add(rest, 1.0, 'REPLACE')
 pack.vertex_groups.new(name=BELT_BONE).add(sorted(belt), 1.0, 'REPLACE')
 add_proxies(pack, bone=WORN_BONE)
+# First-person view uses the full-detail mesh.
+first_person = pack.a3ob_properties_object.copies.add()
+first_person.lod = LOD_VIEW_PILOT
+first_person.resolution = 1
+add_lower_lods(pack, "hauler_worn", bone=WORN_BONE)
 
 # Character-attached models must not be re-centred by the engine.
 geo = new_mesh_object("hauler_worn_geometry")
@@ -330,6 +408,7 @@ ground_matrix = centre @ ground_matrix
 pack.name = "hauler_ground_lod1"
 mark_lod(pack, LOD_VISUAL, 1)
 add_proxies(pack, to_scene=ground_matrix @ worn_matrix.inverted())
+add_lower_lods(pack, "hauler_ground", to_scene=ground_matrix @ worn_matrix.inverted())
 
 mn, mx = bounds(pack)
 geo = box("hauler_ground_geometry", mn, mx)

@@ -5,7 +5,7 @@ $c = Join-Path $PSScriptRoot 'captures'
 $first = [System.Drawing.Image]::FromFile((Join-Path $c 'm1_front.jpg')); $W = $first.Width; $H = $first.Height; $first.Dispose()
 $cw = [int]($H * 0.50); $ch = [int]($H * 0.56); $x0 = [int](($W - $cw) / 2); $y0 = [int]($H * 0.16)
 $tile = 480; $th = [int]($tile * $ch / $cw)
-foreach ($n in 1..10) {
+foreach ($n in 1..11) {
     if (-not (Test-Path (Join-Path $c "m${n}_front.jpg"))) { continue }
     $sheet = New-Object System.Drawing.Bitmap ($tile * 4), $th
     $g = [System.Drawing.Graphics]::FromImage($sheet); $g.InterpolationMode = 'HighQualityBicubic'

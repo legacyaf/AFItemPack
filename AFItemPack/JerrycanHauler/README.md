@@ -28,6 +28,8 @@ at the top of `tools/build_hauler_p3d.py`.
 ## What the model build does to the Meshy mesh
 
 - Scales it to 0.75 m and places it on the back (the character faces -Y in Blender).
+- Derives the lower LODs from the finished LOD 1 mesh (edge collapse for 2 and 3, vertex
+  merging for 4 and 5).
 - Mirrors the hip belt to the wearer's side; in the source mesh it loops away from the body.
 - Replaces the left shoulder strap with a mirror of the right one, raises both by 5 cm and
   pushes the lower webbing outward so the straps clear the shoulders and ribs.
@@ -44,7 +46,11 @@ at the top of `tools/build_hauler_p3d.py`.
 
 - `_f.p3d` is the same mesh as `_m.p3d`. It was checked on two female characters and fits,
   but it is not separately fitted.
-- Only one visual LOD (about 14,700 triangles) and no shadow or first-person LOD.
+- Visual LODs 1-5 (about 14,700 / 7,300 / 4,600 / 1,500 / 600 triangles) and a first-person
+  LOD, generated automatically. LODs 4 and 5 are crude (merged vertices); at the ranges
+  where the pack was seen in the offline test (out to 160 m) it reads the same as a vanilla
+  pack beside it, but they were never inspected up close in game. No shadow LOD, as in the
+  vanilla packs. LOD 1 is heavy for a backpack.
 - The damage look comes from the generic vanilla vest damage overlays, not from art made
   for this pack: damaged is a slight dulling, ruined is clearly darker and dirtier.
 - The jerrycan slot uses the vanilla gas-canister icon; there is no vanilla jerrycan icon.
@@ -58,10 +64,11 @@ at the top of `tools/build_hauler_p3d.py`.
 
 `testmission\capture_tour.ps1` starts the offline mission, which stands eight characters in a
 row (two female; T-shirt, jackets, coats and vests; eight different long guns; plus one
-damaged and one ruined pack), flies the
+damaged and one ruined pack, and one vanilla Alice pack as a control), flies the
 debug camera around each, and saves the views to `testmission\captures`.
 `testmission\make_sheets.ps1` combines them into one picture per character. The last capture
-is the inventory screen with the pack empty, which shows the slot icons.
+but six is the inventory screen with the pack empty, which shows the slot icons. The final
+six look at the last two characters from 5 m out to 160 m, to check the pack at range.
 
 ## Server side
 

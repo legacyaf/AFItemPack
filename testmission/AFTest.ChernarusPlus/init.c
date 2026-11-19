@@ -64,7 +64,7 @@ ref array<string> g_AFDummyName = new array<string>;
 // a shovel and the given long gun on the pack. They stand in a row 6 m north of the player,
 // 3 m apart, number 1 at the west end, facing south toward the player.
 // packHealth is the pack's condition from 1.0 (pristine) down to 0.0 (ruined).
-void Mannequin(int number, vector origin, string body, TStringArray clothes, string gun, float packHealth = 1.0)
+void Mannequin(int number, vector origin, string body, TStringArray clothes, string gun, float packHealth = 1.0, string packType = "AF_JerrycanHauler")
 {
 	vector pos = origin;
 	pos[0] = pos[0] + (number - 4.5) * 3.0;
@@ -87,7 +87,7 @@ void Mannequin(int number, vector origin, string body, TStringArray clothes, str
 	}
 	dummy.GetInventory().CreateInInventory("CargoPants_Black");
 	dummy.GetInventory().CreateInInventory("AthleticShoes_Black");
-	EntityAI pack = dummy.GetInventory().CreateInInventory("AF_JerrycanHauler");
+	EntityAI pack = dummy.GetInventory().CreateInInventory(packType);
 	if (!pack)
 	{
 		Print("[AFTest] mannequin " + number.ToString() + ": FAILED to put the pack on");
@@ -99,9 +99,12 @@ void Mannequin(int number, vector origin, string body, TStringArray clothes, str
 		pack.SetHealth01("", "", packHealth);
 		Print("[AFTest] mannequin " + number.ToString() + ": pack health set to " + pack.GetHealth01("", "").ToString() + ", level " + pack.GetHealthLevel().ToString());
 	}
-	AttachTo(pack, "CanisterGasoline");
-	AttachTo(pack, "Shovel");
-	AttachTo(pack, gun);
+	if (packType == "AF_JerrycanHauler")
+	{
+		AttachTo(pack, "CanisterGasoline");
+		AttachTo(pack, "Shovel");
+		AttachTo(pack, gun);
+	}
 	g_AFDummyPos.Insert(pos);
 	g_AFDummyName.Insert(number.ToString());
 }
@@ -162,6 +165,8 @@ void main()
 	// Damage materials: 9 is badly damaged, 10 is ruined.
 	Mannequin(9, pos, "SurvivorM_Boris", {"TShirt_White"}, "Mosin9130", 0.4);
 	Mannequin(10, pos, "SurvivorM_Boris", {"TShirt_White"}, "Mosin9130", 0.0);
+	// Control for the distance shots: a vanilla pack, to compare how far worn packs are drawn.
+	Mannequin(11, pos, "SurvivorM_Boris", {"TShirt_White"}, "", 1.0, "AliceBag_Black");
 }
 
 // Camera tour: 12 s after start the free debug camera visits every mannequin (front, back,
@@ -171,6 +176,8 @@ class CustomMission: MissionGameplay
 {
 	protected float m_AFTime;
 	protected int m_AFShot = -1;
+	// Distance shots at 5, 10, 20, 40, 80 and 160 m.
+	static const int DIST_SHOTS = 6;
 
 	override void OnUpdate(float timeslice)
 	{
@@ -178,7 +185,7 @@ class CustomMission: MissionGameplay
 
 		m_AFTime += timeslice;
 		int total = g_AFDummyPos.Count() * 4;
-		if (total == 0 || m_AFTime < 12 || m_AFShot >= total + 2)
+		if (total == 0 || m_AFTime < 12 || m_AFShot >= total + 2 + DIST_SHOTS)
 			return;
 
 		int shot = Math.Floor((m_AFTime - 12) / 2.5);
@@ -198,10 +205,39 @@ class CustomMission: MissionGameplay
 			Print("[AFTest] SHOT inventory");
 			return;
 		}
-		if (shot > total)
+		if (shot > total && shot < total + 2)
+			return;
+		if (shot >= total + 2)
 		{
-			if (shot >= total + 2)
+			// LOD check: look at the backs of the last two mannequins from further and further
+			// away. On the left of the picture is the vanilla Alice pack (control), on the right
+			// the ruined hauler, which has nothing attached so the pack shows against the shirt.
+			int step = shot - (total + 2);
+			if (step >= DIST_SHOTS)
+			{
+				cam.SetFreezed(false);
+				cam.SetActive(false);
+				GetHud().ShowHudUI(true);
+				GetHud().ShowQuickbarUI(true);
 				Print("[AFTest] TOUR DONE");
+				return;
+			}
+			if (step == 0)
+				GetGame().GetUIManager().CloseAll();
+			float metres = 5 * Math.Pow(2, step);
+			vector focus = (g_AFDummyPos.Get(g_AFDummyPos.Count() - 1) + g_AFDummyPos.Get(g_AFDummyPos.Count() - 2)) * 0.5;
+			focus[1] = focus[1] + 1.2;
+			// From behind and 20 degrees up, so walls and containers do not block the view.
+			vector eye = focus;
+			eye[1] = eye[1] + metres * 0.342;
+			eye[2] = eye[2] + metres * 0.940;
+			GetHud().ShowHudUI(false);
+			GetHud().ShowQuickbarUI(false);
+			cam.SetActive(true);
+			cam.SetFreezed(true);
+			cam.SetPosition(eye);
+			cam.SetDirection(vector.Direction(eye, focus).Normalized());
+			Print("[AFTest] SHOT dist_" + metres.ToString() + "m");
 			return;
 		}
 
