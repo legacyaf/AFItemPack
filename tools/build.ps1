@@ -20,7 +20,7 @@ if (-not (Test-Path 'P:\')) { subst P: $workdrive }
 if (-not (Test-Path 'P:\AFItemPack\JerrycanHauler\config.cpp')) { throw 'P:\AFItemPack is missing (it should be a link to the repo folder).' }
 
 if (-not $PackOnly) {
-    foreach ($script in 'build_hauler_p3d.py', 'build_cape_p3d.py', 'build_vestpack_p3d.py') {
+    foreach ($script in 'build_hauler_p3d.py', 'build_cape_p3d.py', 'build_vestpack_p3d.py', 'build_commandpost_p3d.py') {
         & $blender -b --python (Join-Path $PSScriptRoot $script) -- $repo 2>&1 |
             Select-String -Pattern 'EXPORTED|Error|Traceback|Exception' | ForEach-Object Line
         if ($LASTEXITCODE -ne 0) { throw "Blender exited with code $LASTEXITCODE" }
