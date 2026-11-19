@@ -1,6 +1,6 @@
 Allied Forces Item Pack
 
-Original Allied Forces items for DayZ. First item: the Jerrycan Hauler.
+Original Allied Forces items for DayZ: the Jerrycan Hauler backpack and the Field Cape.
 
 [h2]Jerrycan Hauler[/h2]
 A welded rebar pack frame built to carry a jerrycan across the wastes.
@@ -12,6 +12,14 @@ A welded rebar pack frame built to carry a jerrycan across the wastes.
 [/list]
 Class name: AF_JerrycanHauler
 
+[h2]Field Cape[/h2]
+A knee-length wool cape fastened across the chest with a leather cord and a brass clasp.
+[list]
+[*]Worn in the belt slot, so it goes with any backpack, vest and armband
+[*]Damaged and ruined looks, male and female fit
+[/list]
+Class name: AF_Cape
+
 [h2]Server owners[/h2]
 [list]
 [*]Copy Keys\AFItemPack.bikey to your server's keys folder and add @AFItemPack to -mod=
@@ -19,4 +27,4 @@ Class name: AF_JerrycanHauler
 [/list]
 
 [h2]Known limits[/h2]
-First release, tested offline on DayZ 1.30 with standing characters. Bulky coats can hide the hip belt. Long guns share one mount, so how high each sits differs by model.
+Tested offline on DayZ 1.30 with standing characters. The cape is not simulated cloth and will pass through the legs when crouching. Bulky coats can hide the hip belt. Long guns share one mount, so how high each sits differs by model.

@@ -2,6 +2,9 @@
 # mission's camera tour (see init.c). Pictures go to testmission\captures.
 # The window is read directly (PrintWindow), so other windows on top of it do not matter,
 # but it must not be minimised while this runs (about 2 minutes).
+#   capture_tour.ps1                  the Jerrycan Hauler line-up (mission AFTest)
+#   capture_tour.ps1 -Mission AFCape  the cape line-up
+param([string]$Mission = 'AFTest')
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type @'
@@ -28,7 +31,10 @@ Remove-Item (Join-Path $out '*.jpg') -ErrorAction SilentlyContinue
 Get-Process DayZDiag_x64 -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false
 Start-Sleep 2
 $start = Get-Date
-cmd /c (Join-Path $here 'run_test.bat')
+$dayz = 'C:\Program Files (x86)\Steam\steamapps\common\DayZ'
+Start-Process (Join-Path $dayz 'DayZDiag_x64.exe') -WorkingDirectory $dayz -ArgumentList @(
+    """-mission=$here\$Mission.ChernarusPlus""", """-mod=$(Split-Path $here -Parent)\@AFItemPack""", """-profiles=$here\profiles""",
+    '-window', '-nosplash', '-noPause', '-scriptDebug=true')
 
 function Save-Window($name) {
     $proc = Get-Process DayZDiag_x64 -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
