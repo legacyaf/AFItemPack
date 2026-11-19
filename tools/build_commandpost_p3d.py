@@ -17,7 +17,7 @@ import sys
 
 import bmesh
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import p3d_common as p3d  # noqa: E402
@@ -44,6 +44,25 @@ WINDOW_Z = (FLOOR + 1.50, FLOOR + 2.00)
 FRONT_WINDOWS_X = ((-3.0, -2.1), (-1.7, -0.8))
 SIDE_WINDOWS_Y = ((-5.6, -4.7), (-3.4, -2.5))
 BATTER = (0.25, 1.0)    # sloped wall base: how far out at the ground, how high it reaches
+# Roof ladder on the back wall. Measured on the game's own ladder buildings (ATC tower, fortified
+# watchtower): the ladder is one vertical line; ladderN_bottom_front and ladderN_top_front are
+# its ends; ladderN_dir is 0.32 m from the bottom on the climber's side; ladderN_con holds the
+# points where it can be entered (bottom and top) and ladderN_con_dir the matching direction
+# points; the view geometry has a thin box 0.48 m wide named ladderN that the player aims at.
+LADDER_X = 2.55
+LADDER_Y = HALF_L + BATTER[0] + 0.02
+LADDER_GAP_X = (2.05, 3.05)   # opening in the back parapet where the ladder arrives
+# Code lock keypad on the dividing wall beside the vault door (command-room face).
+LOCK_X = 1.15
+LOCK_Z = FLOOR + 1.35
+LOCK_SLOT = "Att_CodeLock1_Metal"
+# The mount is a placeholder model of our own with its own Proxy... class in config.cpp, as on
+# the hauler. Pointing the mount at the game's lock model (\dz\gear_takistan\camping\codelock.p3d,
+# as the vanilla houses do) left the attached lock undrawn: the build tools cannot see the
+# game's proxy class on this PC, so the mount was not registered as an attachment point.
+LOCK_PROXY = r"\AFItemPack\Structures\CommandPost\proxy\AF_proxy_codelock.p3d"
+LOCK_TURN = Matrix.Identity(4)   # orientation of the keypad; set after looking at it in game
+LOCK_STANDOFF = 0.03   # how far the mount is in front of the wall face
 
 # name: (texture, material, metres per texture repeat)
 DATA = r"AFItemPack\Structures\CommandPost\data" + "\\"
@@ -145,7 +164,8 @@ box((-W - R, -L - R, CEILING), (W + R, L + R, ROOF_TOP), "concrete")
 walkable.append(((-W - R, -L - R, ROOF_TOP), (W + R, -L - R, ROOF_TOP), (W + R, L + R, ROOF_TOP), (-W - R, L + R, ROOF_TOP)))
 P = PARAPET_THICK
 box((-W - R, -L - R, ROOF_TOP), (W + R, -L - R + P, PARAPET_TOP), "concrete")
-box((-W - R, L + R - P, ROOF_TOP), (W + R, L + R, PARAPET_TOP), "concrete")
+box((-W - R, L + R - P, ROOF_TOP), (LADDER_GAP_X[0], L + R, PARAPET_TOP), "concrete")   # back, with an
+box((LADDER_GAP_X[1], L + R - P, ROOF_TOP), (W + R, L + R, PARAPET_TOP), "concrete")    # opening for the ladder
 box((-W - R, -L - R + P, ROOF_TOP), (-W - R + P, L + R - P, PARAPET_TOP), "concrete")
 box((W + R - P, -L - R + P, ROOF_TOP), (W + R, L + R - P, PARAPET_TOP), "concrete")
 
@@ -220,11 +240,17 @@ box((VAULT_X[0], vy0 - 0.02, VAULT_TOP), (VAULT_X[1], vy1 + 0.02, VAULT_TOP + 0.
 # Antenna mast and the (for now decorative) ladder up the back wall.
 box((-2.6, 4.0, ROOF_TOP), (-2.3, 4.3, ROOF_TOP + 0.25), "concrete", detail=2, collide=False)
 box((-2.49, 4.11, ROOF_TOP + 0.25), (-2.41, 4.19, ROOF_TOP + 5.5), "metal", detail=3, collide=False)
-for x in (2.30, 2.76):
-    box((x, L + b_out, 0.0), (x + 0.04, L + b_out + 0.04, PARAPET_TOP + 0.9), "metal", detail=2, collide=False)
-for k in range(13):
+for x in (LADDER_X - 0.25, LADDER_X + 0.21):
+    box((x, LADDER_Y - 0.02, 0.0), (x + 0.04, LADDER_Y + 0.02, ROOF_TOP + 1.1), "metal", detail=2, collide=False)
+    # handrail from the ladder onto the roof
+    box((x, L + R - 0.6, ROOF_TOP + 1.06), (x + 0.04, LADDER_Y + 0.02, ROOF_TOP + 1.10), "metal", detail=1, collide=False)
+    box((x, L + R - 0.6, ROOF_TOP), (x + 0.04, L + R - 0.56, ROOF_TOP + 1.10), "metal", detail=1, collide=False)
+for k in range(12):
     z = 0.3 + k * 0.3
-    box((2.34, L + b_out + 0.005, z), (2.76, L + b_out + 0.035, z + 0.03), "metal", detail=1, collide=False)
+    box((LADDER_X - 0.21, LADDER_Y - 0.015, z), (LADDER_X + 0.21, LADDER_Y + 0.015, z + 0.03), "metal", detail=1, collide=False)
+for z in (1.2, 2.6):   # stand-offs holding the ladder off the wall
+    box((LADDER_X - 0.25, L, z), (LADDER_X - 0.21, LADDER_Y, z + 0.04), "metal", detail=1, collide=False)
+    box((LADDER_X + 0.21, L, z), (LADDER_X + 0.25, LADDER_Y, z + 0.04), "metal", detail=1, collide=False)
 
 # "AF" stencilled on the front wall, as thin dark slabs just off the plaster.
 ay = (-L - 0.012, -L - 0.002)
@@ -353,6 +379,13 @@ def add_mass(obj, per_vertex):
     bm.free()
 
 
+# The placeholder model the lock mount refers to: one small triangle.
+p3d.new_scene()
+os.makedirs(os.path.join(out_dir, "proxy"), exist_ok=True)
+placeholder = p3d.new_mesh_object("AF_proxy_codelock", [(0, 0, 0), (0.01, 0, 0), (0, 0.01, 0)], [(0, 1, 2)])
+p3d.mark_lod(placeholder, p3d.LOD_VISUAL, 1)
+p3d.export(os.path.join(out_dir, "proxy", "AF_proxy_codelock.p3d"))
+
 p3d.new_scene()
 # Visual LODs: detail d is drawn in LODs 1..d; detail -2 marks a stand-in used from LOD 2 on.
 for lod in (1, 2, 3):
@@ -360,6 +393,21 @@ for lod in (1, 2, 3):
     obj = build("commandpost_lod%d" % lod, chosen)
     p3d.mark_lod(obj, p3d.LOD_VISUAL, lod)
     print("LOD", obj.name, "triangles", sum(len(p.vertices) - 2 for p in obj.data.polygons))
+    if lod <= 2:
+        # Where an attached code lock is drawn: a proxy triangle on the wall beside the vault
+        # door, carrying the slot name (which attachment it shows).
+        tri = bpy.data.meshes.new("codelock_proxy_lod%d" % lod)
+        tri.from_pydata([(0, 0, 0), (0, 0, 0.2), (0, 0.1, 0)], [], [(0, 1, 2)])
+        tri.update(calc_edges=True)
+        proxy = bpy.data.objects.new(tri.name, tri)
+        proxy.hide_render = True
+        bpy.context.scene.collection.objects.link(proxy)
+        proxy.a3ob_properties_object_proxy.is_a3_proxy = True
+        proxy.a3ob_properties_object_proxy.proxy_path = LOCK_PROXY
+        proxy.a3ob_properties_object_proxy.proxy_index = 1
+        proxy.parent = obj
+        proxy.matrix_world = Matrix.Translation((LOCK_X, DIVIDE_Y[0] - 0.005 - LOCK_STANDOFF, LOCK_Z)) @ LOCK_TURN
+        proxy.vertex_groups.new(name=LOCK_SLOT.lower()).add(range(3), 1.0, 'REPLACE')
 
 solid = [p for p in pieces if p.collide]
 geometry = build("commandpost_geometry", solid, textured=False, components=True)
@@ -368,7 +416,11 @@ geometry = build("commandpost_geometry", solid, textured=False, components=True)
 # (the mast counts), and the building placed at ground level sat buried to its roof.
 p3d.mark_lod(geometry, p3d.LOD_GEOMETRY, 1, properties=(("class", "house"), ("map", "house"), ("autocenter", "0")))
 add_mass(geometry, 150.0)
-p3d.add_copy(geometry, p3d.LOD_VIEW_GEOMETRY)
+# View geometry: the same solids plus the thin box a player aims at to use the ladder.
+ladder_box = Piece(*_box_data((LADDER_X - 0.24, LADDER_Y - 0.02, 0.0), (LADDER_X + 0.24, LADDER_Y + 0.02, ROOF_TOP + 0.3)),
+                   "metal", 3, True, "ladder1")
+view = build("commandpost_view", solid + [ladder_box], textured=False, components=True)
+p3d.mark_lod(view, p3d.LOD_VIEW_GEOMETRY, 1)
 fire = build("commandpost_fire", solid, textured=False, fire=True, components=True)
 p3d.mark_lod(fire, p3d.LOD_FIRE_GEOMETRY, 1)
 
@@ -406,6 +458,13 @@ memory_points = {
     "doors1_action": [((DOOR_X[0] + DOOR_X[1]) / 2, -L + 0.06, FLOOR + 1.0)],
     "doors2_axis": [(DOOR2_HINGE[0], DOOR2_HINGE[1], FLOOR), (DOOR2_HINGE[0], DOOR2_HINGE[1], VAULT_TOP)],
     "doors2_action": [(wheel_c[0], VAULT_SLAB_Y[0], wheel_c[1])],
+    "ladder1_bottom_front": [(LADDER_X, LADDER_Y, 0.0)],
+    "ladder1_top_front": [(LADDER_X, LADDER_Y, ROOF_TOP)],
+    "ladder1_dir": [(LADDER_X, LADDER_Y + 0.32, 0.0)],
+    "ladder1_con": [(LADDER_X, LADDER_Y, 0.0), (LADDER_X, LADDER_Y, ROOF_TOP)],
+    "ladder1_con_dir": [(LADDER_X, LADDER_Y + 0.32, 0.0), (LADDER_X, LADDER_Y - 0.37, ROOF_TOP)],
+    "ladder1": [(LADDER_X, LADDER_Y, 0.28)],
+    LOCK_SLOT.lower(): [(LOCK_X, DIVIDE_Y[0] - 0.005, LOCK_Z)],
 }
 mem_verts = [v for pts in memory_points.values() for v in pts]
 memory = p3d.new_mesh_object("commandpost_memory", mem_verts, [])

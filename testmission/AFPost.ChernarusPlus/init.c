@@ -3,10 +3,13 @@
 //
 // The building stands on the concrete east of the player, entrance facing south. The camera
 // looks at it from outside, inside and above; both doors are opened by script; one character
-// is stood on each floor and on the roof, and one walks in through the entrance and the vault.
+// walks in through the entrance and the vault, a code lock is fitted to the vault door, and
+// another character climbs the roof ladder.
 
 Building g_AFPost;
 PlayerBase g_AFWalker;
+PlayerBase g_AFClimber;
+DigitalCodeLock g_AFLock;
 ref array<PlayerBase> g_AFStanders = new array<PlayerBase>;
 ref array<string> g_AFStanderName = new array<string>;
 vector g_AFPostPos;
@@ -61,11 +64,12 @@ void main()
 	g_AFPost.GetCollisionBox(box);
 	Print("[AFTest] building created at " + g_AFPost.GetPosition().ToString() + ", collision box " + box[0].ToString() + " to " + box[1].ToString());
 
-	// Dropped from 1 m above each surface; where they come to rest is printed later.
-	Stand("command room floor", "2.5 1.2 -4");
-	Stand("panic room floor", "0 1.2 3");
-	Stand("roof", "0 4.5 2");
 	g_AFWalker = Stand("walker", "0.45 0.3 -11");
+	// The climber waits at the foot of the roof ladder, facing the back wall.
+	g_AFClimber = Stand("climber", "2.55 0.05 7.75");
+	if (g_AFClimber)
+		g_AFClimber.SetOrientation("180 0 0");
+	Print("[AFTest] building: ladders " + g_AFPost.GetLaddersCount().ToString() + ", ladder1 index " + HumanCommandLadder.DebugGetLadderIndex("ladder1").ToString() + ", can use construction " + g_AFPost.CanUseConstruction().ToString() + ", attachment slots " + g_AFPost.GetInventory().GetAttachmentSlotsCount().ToString());
 }
 
 class CustomMission: MissionGameplay
@@ -118,6 +122,12 @@ class CustomMission: MissionGameplay
 		if (m_AFTime < 10)
 			return;
 		int step = Math.Floor((m_AFTime - 10) / 2.5);
+		// The climber is pushed up the ladder every frame (steps 21-26).
+		if (g_AFClimber && step >= 21 && step <= 26)
+		{
+			g_AFClimber.GetInputController().OverrideMovementSpeed(true, 1);
+			g_AFClimber.GetInputController().OverrideMovementAngle(true, 0);
+		}
 		// The walker is steered every frame once the doors are open (steps 9-16).
 		if (g_AFWalker && step >= 9 && step <= 16)
 		{
@@ -170,11 +180,75 @@ class CustomMission: MissionGameplay
 				Look("walker_end", "2.9 1.9 0.2", "-1.5 1.2 5.5");
 				break;
 			case 18:
+				// Code lock: close the vault, put the game's code lock in its slot, set a code.
+				g_AFPost.CloseDoor(1);
+				g_AFLock = DigitalCodeLock.Cast(g_AFPost.GetInventory().CreateAttachment("DigitalCodeLock"));
+				if (!g_AFLock)
+					Print("[AFTest] FAILED to attach a DigitalCodeLock to the building");
+				else
+				{
+					InventoryLocation loc = new InventoryLocation;
+					g_AFLock.GetInventory().GetCurrentInventoryLocation(loc);
+					Print("[AFTest] code lock attached in slot " + InventorySlots.GetSlotName(loc.GetSlot()) + ", lock controls door index " + g_AFLock.GetCodeLockComponent().GetDoorIndex().ToString());
+				}
+				Look("vault_lock", "1.6 1.5 -3.2", "1.0 1.47 -1.2");
+				break;
+			case 19:
+				if (g_AFLock)
+				{
+					bool ok = g_AFLock.GetCodeLockComponent().SetLockCode("1234");
+					vector lockAt = g_AFPost.WorldToModel(g_AFLock.GetPosition());
+					Print("[AFTest] code lock is drawn at " + lockAt.ToString() + " in the building's own coordinates (mount is at " + g_AFPost.GetMemoryPointPos("att_codelock1_metal").ToString() + "); hierarchy parent " + g_AFLock.GetHierarchyParent().ToString());
+					Print("[AFTest] code set: " + ok.ToString() + "; lock locked: " + g_AFLock.IsLocked().ToString() + "; vault door locked: " + g_AFPost.IsDoorLocked(1).ToString() + "; entrance door locked: " + g_AFPost.IsDoorLocked(0).ToString());
+				}
+				Look("vault_lock_locked", "1.9 1.55 -1.9", "1.15 1.47 -1.0");
+				break;
+			case 20:
+				if (g_AFLock)
+				{
+					g_AFLock.GetCodeLockComponent().SetLockState(false);
+					Print("[AFTest] lock released: lock locked " + g_AFLock.IsLocked().ToString() + "; vault door locked: " + g_AFPost.IsDoorLocked(1).ToString());
+					g_AFLock.GetCodeLockComponent().SetLockState(true);
+					Print("[AFTest] lock engaged again: vault door locked: " + g_AFPost.IsDoorLocked(1).ToString());
+				}
+				Look("ladder_before", "6.5 2.5 12", "2.55 1.9 7.3");
+				break;
+			case 21:
+				if (g_AFClimber)
+				{
+					// Ladder numbers start at 1 (ladder1); with 0 the command starts and drops at once.
+					HumanCommandLadder climb = g_AFClimber.StartCommand_Ladder(g_AFPost, 1);
+					if (climb)
+						Print("[AFTest] ladder: climb started");
+					else
+						Print("[AFTest] ladder: FAILED to start climbing");
+				}
+				break;
+			case 23: Look("ladder_climbing", "6.5 2.5 12", "2.55 1.9 7.3"); break;
+			case 27:
+				if (g_AFClimber)
+				{
+					g_AFClimber.GetInputController().OverrideMovementSpeed(false, 0);
+					g_AFClimber.GetInputController().OverrideMovementAngle(false, 0);
+					vector c = g_AFClimber.GetPosition() - g_AFPostPos;
+					string onLadder = "no";
+					if (g_AFClimber.GetCommand_Ladder())
+						onLadder = "yes";
+					Print("[AFTest] climber ended " + c[1].ToString() + " m above the base, at x " + c[0].ToString() + " z " + c[2].ToString() + ", still on the ladder: " + onLadder);
+				}
+				Look("ladder_after", "6.5 6 13", "2.55 3.6 6.5");
+				break;
+			case 28:
 				FreeDebugCamera.GetInstance().SetFreezed(false);
 				FreeDebugCamera.GetInstance().SetActive(false);
 				GetHud().ShowHudUI(true);
 				Print("[AFTest] TOUR DONE");
 				break;
+		}
+		if (g_AFClimber && step >= 21 && step <= 27)
+		{
+			vector cl = g_AFClimber.GetPosition() - g_AFPostPos;
+			Print("[AFTest] climber at step " + step.ToString() + ": height " + cl[1].ToString() + " x " + cl[0].ToString() + " z " + cl[2].ToString());
 		}
 		if (g_AFWalker && step >= 9 && step <= 17)
 		{
