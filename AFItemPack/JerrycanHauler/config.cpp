@@ -1,8 +1,7 @@
 // Jerrycan Hauler backpack. Tested offline in DayZ 1.30; see README.md in this folder.
 // The CHECK notes below date from the first draft. Since verified against vanilla 1.30:
 // requiredAddons names, the CanisterGasoline/Shovel parent classes and "+=" patches,
-// both sound set names, and a rifle attaching to "Shoulder". Still open: the two
-// placeholder slot icons.
+// both sound set names, and a rifle attaching to "Shoulder".
 
 class CfgPatches
 {
@@ -44,13 +43,13 @@ class CfgSlots
 	{
 		name = "AF_Hauler_Jerrycan";
 		displayName = "Jerrycan";
-		ghostIcon = "set:dayz_inventory image:missing"; // CHECK: placeholder icon
+		ghostIcon = "set:dayz_inventory image:gascanister"; // vanilla icon; there is no jerrycan one
 	};
 	class Slot_AF_Hauler_Shovel
 	{
 		name = "AF_Hauler_Shovel";
 		displayName = "Shovel";
-		ghostIcon = "set:dayz_inventory image:missing"; // CHECK: placeholder icon
+		ghostIcon = "set:dayz_inventory image:shoveltools"; // vanilla shovel icon
 	};
 };
 
@@ -94,8 +93,16 @@ class CfgVehicles
 				class Health
 				{
 					hitpoints = 250;
-					// Damage rvmats can be added per level once the materials exist.
-					healthLevels[] = {{1.0, {}}, {0.7, {}}, {0.5, {}}, {0.3, {}}, {0.0, {}}};
+					// Pristine and worn use the normal material, damaged and badly damaged the
+					// "_damage" one, ruined the "_destruct" one (same scheme as the vanilla packs).
+					healthLevels[] =
+					{
+						{1.0, {"AFItemPack\JerrycanHauler\data\jerrycan_hauler.rvmat"}},
+						{0.7, {"AFItemPack\JerrycanHauler\data\jerrycan_hauler.rvmat"}},
+						{0.5, {"AFItemPack\JerrycanHauler\data\jerrycan_hauler_damage.rvmat"}},
+						{0.3, {"AFItemPack\JerrycanHauler\data\jerrycan_hauler_damage.rvmat"}},
+						{0.0, {"AFItemPack\JerrycanHauler\data\jerrycan_hauler_destruct.rvmat"}}
+					};
 				};
 			};
 		};

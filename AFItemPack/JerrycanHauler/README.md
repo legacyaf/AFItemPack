@@ -12,7 +12,7 @@ It has not been run on a server.
 | `model.cfg` | Character skeleton for the worn models (bone list read from the vanilla backpack models) | hand-written |
 | `JerrycanHauler_m.p3d`, `_f.p3d`, `_g.p3d` | Worn (male, female) and ground models | `tools/build_hauler_p3d.py` |
 | `proxy/AF_Hauler_proxy_*.p3d` | Attachment-point placeholders | `tools/build_hauler_p3d.py` |
-| `data/*.paa`, `data/jerrycan_hauler.rvmat` | Textures and material | ImageToPAA from the PNGs; rvmat adapted from the vanilla Alice pack |
+| `data/*.paa`, `data/jerrycan_hauler.rvmat`, `_damage.rvmat`, `_destruct.rvmat` | Textures and the pristine, damaged and ruined materials | ImageToPAA from the PNGs; rvmats adapted from the vanilla Alice pack |
 | `scripts/4_World/AF_JerrycanHauler.c` | Makes the pack's `Shoulder` (scabbard) slot firearms-only | hand-written |
 
 ## Rebuilding
@@ -45,8 +45,9 @@ at the top of `tools/build_hauler_p3d.py`.
 - `_f.p3d` is the same mesh as `_m.p3d`. It was checked on two female characters and fits,
   but it is not separately fitted.
 - Only one visual LOD (about 14,700 triangles) and no shadow or first-person LOD.
-- No damage materials; `healthLevels` lists no rvmats.
-- The jerrycan and shovel slot icons are the `missing` placeholder.
+- The damage look comes from the generic vanilla vest damage overlays, not from art made
+  for this pack: damaged is a slight dulling, ruined is clearly darker and dirtier.
+- The jerrycan slot uses the vanilla gas-canister icon; there is no vanilla jerrycan icon.
 - Bulky tops partly swallow the hip belt (seen with the raincoat).
 - Long guns share one attachment point, so their height differs by model: rifles such as
   the Mosin, SVD and SKS reach from about head height to the knee; the AKM and M4A1 sit
@@ -56,9 +57,11 @@ at the top of `tools/build_hauler_p3d.py`.
 ## Gap test line-up
 
 `testmission\capture_tour.ps1` starts the offline mission, which stands eight characters in a
-row (two female; T-shirt, jackets, coats and vests; eight different long guns), flies the
+row (two female; T-shirt, jackets, coats and vests; eight different long guns; plus one
+damaged and one ruined pack), flies the
 debug camera around each, and saves the views to `testmission\captures`.
-`testmission\make_sheets.ps1` combines them into one picture per character.
+`testmission\make_sheets.ps1` combines them into one picture per character. The last capture
+is the inventory screen with the pack empty, which shows the slot icons.
 
 ## Server side
 

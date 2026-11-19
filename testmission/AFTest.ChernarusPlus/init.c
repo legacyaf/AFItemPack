@@ -63,7 +63,8 @@ ref array<string> g_AFDummyName = new array<string>;
 // Gap tests: a standing character wearing the pack over the given clothes, with a jerrycan,
 // a shovel and the given long gun on the pack. They stand in a row 6 m north of the player,
 // 3 m apart, number 1 at the west end, facing south toward the player.
-void Mannequin(int number, vector origin, string body, TStringArray clothes, string gun)
+// packHealth is the pack's condition from 1.0 (pristine) down to 0.0 (ruined).
+void Mannequin(int number, vector origin, string body, TStringArray clothes, string gun, float packHealth = 1.0)
 {
 	vector pos = origin;
 	pos[0] = pos[0] + (number - 4.5) * 3.0;
@@ -93,6 +94,11 @@ void Mannequin(int number, vector origin, string body, TStringArray clothes, str
 		return;
 	}
 	Print("[AFTest] mannequin " + number.ToString() + ": " + body + " wearing " + wearing + "with " + gun);
+	if (packHealth < 1.0)
+	{
+		pack.SetHealth01("", "", packHealth);
+		Print("[AFTest] mannequin " + number.ToString() + ": pack health set to " + pack.GetHealth01("", "").ToString() + ", level " + pack.GetHealthLevel().ToString());
+	}
 	AttachTo(pack, "CanisterGasoline");
 	AttachTo(pack, "Shovel");
 	AttachTo(pack, gun);
@@ -128,10 +134,9 @@ void main()
 	{
 		Print("[AFTest] AF_JerrycanHauler created on the player");
 		// Check 3: attach one of each item straight onto the worn pack.
+		// The player's own pack is left empty so the inventory screen shows the slot icons;
+		// attaching is tested on the mannequins.
 		DumpSlots(pack);
-		AttachTo(pack, "CanisterGasoline");
-		AttachTo(pack, "Shovel");
-		AttachTo(pack, "Mosin9130");
 		// Check 4: a second shovel must still go on the character itself (vanilla slots).
 		Print("[AFTest] now attaching a second shovel to the character");
 		AttachTo(player, "Shovel");
@@ -154,6 +159,9 @@ void main()
 	Mannequin(6, pos, "SurvivorM_Boris", {"QuiltedJacket_Black", "HighCapacityVest_Black"}, "Winchester70");
 	Mannequin(7, pos, "SurvivorM_Boris", {"Raincoat_Orange"}, "SKS");
 	Mannequin(8, pos, "SurvivorM_Boris", {"TShirt_White", "UKAssVest_Olive"}, "Izh18");
+	// Damage materials: 9 is badly damaged, 10 is ruined.
+	Mannequin(9, pos, "SurvivorM_Boris", {"TShirt_White"}, "Mosin9130", 0.4);
+	Mannequin(10, pos, "SurvivorM_Boris", {"TShirt_White"}, "Mosin9130", 0.0);
 }
 
 // Camera tour: 12 s after start the free debug camera visits every mannequin (front, back,
@@ -170,7 +178,7 @@ class CustomMission: MissionGameplay
 
 		m_AFTime += timeslice;
 		int total = g_AFDummyPos.Count() * 4;
-		if (total == 0 || m_AFTime < 12 || m_AFShot >= total)
+		if (total == 0 || m_AFTime < 12 || m_AFShot >= total + 2)
 			return;
 
 		int shot = Math.Floor((m_AFTime - 12) / 2.5);
@@ -179,13 +187,21 @@ class CustomMission: MissionGameplay
 		m_AFShot = shot;
 
 		FreeDebugCamera cam = FreeDebugCamera.GetInstance();
-		if (shot >= total)
+		if (shot == total)
 		{
+			// Last stop: back to the player with the inventory open, to show the slot icons.
 			cam.SetFreezed(false);
 			cam.SetActive(false);
 			GetHud().ShowHudUI(true);
 			GetHud().ShowQuickbarUI(true);
-			Print("[AFTest] TOUR DONE");
+			ShowInventory();
+			Print("[AFTest] SHOT inventory");
+			return;
+		}
+		if (shot > total)
+		{
+			if (shot >= total + 2)
+				Print("[AFTest] TOUR DONE");
 			return;
 		}
 
