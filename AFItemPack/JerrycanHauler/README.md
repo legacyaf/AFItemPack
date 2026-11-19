@@ -1,24 +1,64 @@
 # Jerrycan Hauler mod folder
 
-`config.cpp` is a draft written from memory and has not been run in DayZ. This folder is
-laid out the way the packed mod expects (`AFItemPack\JerrycanHauler\...`), but the model and
-texture files below still have to be made on a Windows PC with DayZ Tools.
+Laid out the way the packed mod expects (`AFItemPack\JerrycanHauler\...`). Everything here has
+been built and tested offline in DayZ 1.30 (`DayZDiag_x64.exe`, test mission in `testmission/`).
+It has not been run on a server.
 
-## Files still needed here
+## Files
 
-| File | What it is | Made from |
+| File | What it is | Made by |
 |---|---|---|
-| `JerrycanHauler_g.p3d` | Ground model (lying in the world) | `models/jerrycan_hauler/lowpoly/jerrycan_hauler_15k.glb` |
-| `JerrycanHauler_m.p3d`, `JerrycanHauler_f.p3d` | Worn models, fitted and weighted to the male and female character skeletons | same mesh |
-| `data/jerrycan_hauler_co.paa`, `_nohq.paa`, `_smdi.paa`, `jerrycan_hauler.rvmat` | Textures and material | PNGs in `models/jerrycan_hauler/lowpoly/textures/` |
-| `proxy/AF_Hauler_proxy_jerrycan.p3d`, `_shovel.p3d`, `_weapon.p3d` | Attachment-point proxies placed in the worn and ground models | Object Builder |
+| `config.cpp` | Item, slots, proxies, script registration | hand-written |
+| `model.cfg` | Character skeleton for the worn models (bone list read from the vanilla backpack models) | hand-written |
+| `JerrycanHauler_m.p3d`, `_f.p3d`, `_g.p3d` | Worn (male, female) and ground models | `tools/build_hauler_p3d.py` |
+| `proxy/AF_Hauler_proxy_*.p3d` | Attachment-point placeholders | `tools/build_hauler_p3d.py` |
+| `data/*.paa`, `data/jerrycan_hauler.rvmat` | Textures and material | ImageToPAA from the PNGs; rvmat adapted from the vanilla Alice pack |
+| `scripts/4_World/AF_JerrycanHauler.c` | Makes the pack's `Shoulder` (scabbard) slot firearms-only | hand-written |
 
-## Lines to check in `config.cpp` (marked `CHECK`)
+## Rebuilding
 
-1. `requiredAddons` names.
-2. The `+=` slot patches on `CanisterGasoline` and `Shovel`, and their parent classes.
-3. The `Shoulder` slot on the pack accepting and showing a long gun.
-4. Slot icons and the pick-up/drop sound set names.
+Close DayZ, then run `tools\build.ps1` (add `-PackOnly` after config or script changes only).
+It needs DayZ Tools, Blender with the Arma 3 Object Builder add-on, and the `P:` work drive
+with `P:\AFItemPack` linked to this repository's `AFItemPack` folder. The PBO is written to
+`@AFItemPack\Addons`.
+
+All fit numbers (pack height and position, strap lift, attachment points) are named settings
+at the top of `tools/build_hauler_p3d.py`.
+
+## What the model build does to the Meshy mesh
+
+- Scales it to 0.75 m and places it on the back (the character faces -Y in Blender).
+- Mirrors the hip belt to the wearer's side; in the source mesh it loops away from the body.
+- Replaces the left shoulder strap with a mirror of the right one, raises both by 5 cm and
+  pushes the lower webbing outward so the straps clear the shoulders and ribs.
+- Weights the belt to `Pelvis` and everything else to `Spine3`.
+
+## Tested offline
+
+- Pack is worn on the back, shows in hands, on the ground and in the inspect view.
+- 10 x 9 cargo.
+- Jerrycan, shovel and Mosin attach to the pack, each in its own slot, and are drawn on it.
+- A shovel still attaches to the character's own shoulder slot.
+
+## Known gaps
+
+- `_f.p3d` is the same mesh as `_m.p3d`. It was checked on two female characters and fits,
+  but it is not separately fitted.
+- Only one visual LOD (about 14,700 triangles) and no shadow or first-person LOD.
+- No damage materials; `healthLevels` lists no rvmats.
+- The jerrycan and shovel slot icons are the `missing` placeholder.
+- Bulky tops partly swallow the hip belt (seen with the raincoat).
+- Long guns share one attachment point, so their height differs by model: rifles such as
+  the Mosin, SVD and SKS reach from about head height to the knee; the AKM and M4A1 sit
+  shorter. Tried: Mosin, MP-133, AKM, M4A1, SVD, Winchester 70, SKS, IZH-18.
+- Everything was checked on standing characters only, not while moving, crouching or prone.
+
+## Gap test line-up
+
+`testmission\capture_tour.ps1` starts the offline mission, which stands eight characters in a
+row (two female; T-shirt, jackets, coats and vests; eight different long guns), flies the
+debug camera around each, and saves the views to `testmission\captures`.
+`testmission\make_sheets.ps1` combines them into one picture per character.
 
 ## Server side
 

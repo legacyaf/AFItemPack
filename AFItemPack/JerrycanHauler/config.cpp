@@ -1,6 +1,8 @@
-// Jerrycan Hauler backpack - DRAFT written from memory, not yet tested in game.
-// Lines marked CHECK depend on vanilla DayZ definitions that could not be verified
-// while writing this. See README.md in this folder.
+// Jerrycan Hauler backpack. Tested offline in DayZ 1.30; see README.md in this folder.
+// The CHECK notes below date from the first draft. Since verified against vanilla 1.30:
+// requiredAddons names, the CanisterGasoline/Shovel parent classes and "+=" patches,
+// both sound set names, and a rifle attaching to "Shoulder". Still open: the two
+// placeholder slot icons.
 
 class CfgPatches
 {
@@ -11,7 +13,27 @@ class CfgPatches
 		requiredVersion = 0.1;
 		// CHECK: these must be the addons that define Clothing, Shovel and CanisterGasoline,
 		// so this config loads after them.
-		requiredAddons[] = {"DZ_Data", "DZ_Characters", "DZ_Characters_Backpacks", "DZ_Gear_Tools", "DZ_Vehicles_Parts"};
+		requiredAddons[] = {"DZ_Data", "DZ_Scripts","DZ_Characters", "DZ_Characters_Backpacks", "DZ_Gear_Tools", "DZ_Vehicles_Parts"};
+	};
+};
+
+// Registers the script folder (scripts/4_World holds the pack's attachment rule).
+class CfgMods
+{
+	class AFItemPack
+	{
+		dir = "AFItemPack";
+		name = "AF Item Pack";
+		type = "mod";
+		dependencies[] = {"World"};
+		class defs
+		{
+			class worldScriptModule
+			{
+				value = "";
+				files[] = {"AFItemPack/JerrycanHauler/scripts/4_World"};
+			};
+		};
 	};
 };
 
@@ -106,6 +128,8 @@ class CfgVehicles
 	};
 	class Shovel: Inventory_Base
 	{
+		// The shovel also fits "Shoulder", which the pack uses as its scabbard. The script
+		// in scripts/4_World keeps non-firearms out of that slot on the pack.
 		inventorySlot[] += {"AF_Hauler_Shovel"};
 	};
 };
