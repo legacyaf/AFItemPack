@@ -1,0 +1,20 @@
+{
+  "name": "af-content-factory-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.9"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --watch src/index.js",
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "discord:register": "node --env-file-if-exists=.env src/discord/register.js"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.17",
+    "discord.js": "^14.28.1",
+    "express": "^5.3.0",
+    "pg": "^8.23.1"
+  }
+}

@@ -23,8 +23,18 @@ First version, built and tested offline in DayZ 1.30. It has not been on a serve
 | `proxy/AF_proxy_codelock.p3d` | Placeholder marking where the code lock is drawn | `tools/build_commandpost_p3d.py` |
 
 There is no source model: every wall, slab and door is generated from the layout numbers at
-the top of the build script. Its textures are the game's own (Nasdara plaster, vanilla
-concrete and steel), referenced by path, so the mod carries none for it.
+the top of the build script. Its textures are the game's own Nasdara structure textures,
+referenced by path, so the mod carries none for it:
+
+- outside: sandy brick-plaster on the command room, weathered sandy concrete on the panic room;
+- inside: a painted wall with a dark dado in the command room, cinder block in the panic room,
+  concrete panel floor, bare concrete ceiling, bitumen roof;
+- steel: rusty sheet for shutters and awning, plate for the entrance door and ladder, dark
+  greased steel for the vault door.
+
+Detail pieces (window bars and sills, door frame and lintel, awning braces, lamp, bolt heads,
+vault wheel, locking bars, roof vent, cooling unit, mast arms and guy wires, single sandbags)
+are drawn only in LOD 1 or 2; LOD 3 is the plain shell (about 4,100 / 1,500 / 600 triangles).
 
 ## Placing it
 
@@ -61,7 +71,8 @@ HESCO walls and corners (`hbarrierwall_*_tk`), the container watchtower
 - **The keypad is on the command-room side only.** Someone shut inside the panic room has no
   keypad to reach; whether the game lets the lock be worked from behind was not tested.
 - A code lock needs a battery when a player fits it; the test set the code directly.
-- **Plain look.** Flat walls with tiling textures, box sandbags in one colour, a slab for a vault
-  door. No wear, decals, wiring or lights, and no furniture (place vanilla props).
+- **Still simple up close.** Walls are flat planes with repeating textures; the sandbags are
+  six-sided sacks in one flat sand colour; there are no dirt streaks or decals, no working
+  lights (the entrance lamp is a prop), and no furniture (place vanilla props).
 - Interiors are not darkened; there are no loot spawn points and no AI navigation paths.
 - Checked on Chernarus only; the building has not been placed on Nasdara.

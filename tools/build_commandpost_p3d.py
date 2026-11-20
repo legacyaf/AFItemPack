@@ -13,6 +13,7 @@ and a memory LOD (door axes). Doors are the named selections doors1 (entrance) a
 """
 import math
 import os
+import random
 import sys
 
 import bmesh
@@ -64,22 +65,32 @@ LOCK_PROXY = r"\AFItemPack\Structures\CommandPost\proxy\AF_proxy_codelock.p3d"
 LOCK_TURN = Matrix.Identity(4)   # orientation of the keypad; set after looking at it in game
 LOCK_STANDOFF = 0.03   # how far the mount is in front of the wall face
 
-# name: (texture, material, metres per texture repeat)
+# name: (texture, material, metres per texture repeat[, True if the texture is one wall high])
+# All textures are the game's own Nasdara structure textures, referenced by path.
 DATA = r"AFItemPack\Structures\CommandPost\data" + "\\"
+TEX = r"dz\structures_takistan\data" + "\\"
 MATERIALS = {
-    "plaster": (r"dz\structures_takistan\data\plaster\plaster_mil_beige_co.paa", DATA + "af_plaster.rvmat", 3.0),
-    "concrete": (r"dz\structures\data\concrete\concretecrude_co.paa", DATA + "af_concrete.rvmat", 3.0),
-    "metal": (r"dz\structures\data\metal\metal_seam_rusty_co.paa", DATA + "af_metal.rvmat", 1.5),
-    "vault": (r"dz\structures\data\metal\rotfurnace_metal_01_co.paa", DATA + "af_vault.rvmat", 2.0),
-    # A flat sand colour: the game's own sandbag texture is a laid-out sheet, and repeated over
-    # plain boxes it read as green crates.
-    "sandbag": ("#(argb,8,8,3)color(0.60,0.52,0.37,1.0,CO)", DATA + "af_concrete.rvmat", 1.2),
+    "wall": (TEX + r"brick\wallbrickplastered_co.paa", DATA + "af_wall.rvmat", 2.4),            # command room, outside
+    "bunker": (TEX + r"concrete\concretebroken_paint_sandy_co.paa", DATA + "af_bunker.rvmat", 3.0),  # panic room, outside
+    "interior": (TEX + r"plaster\walls_interior02_co.paa", DATA + "af_interior.rvmat", 1.5, True),   # command room, inside
+    "cinder": (TEX + r"concrete\cinderblock_wall_01_co.paa", DATA + "af_cinder.rvmat", 2.5),     # panic room, inside
+    "floor": (TEX + r"concrete\concrete_panel_floor_01_co.paa", DATA + "af_floor.rvmat", 3.0),
+    "concrete": (TEX + r"concrete\concrete_bare01_co.paa", DATA + "af_concrete.rvmat", 2.5),     # ceilings, lintels, sills
+    "roof": (TEX + r"roof\roof_bitumen_old_co.paa", DATA + "af_roof.rvmat", 3.0),
+    "sheet": (TEX + r"metal\metal_plate_ind_rusty_02_co.paa", DATA + "af_sheet.rvmat", 1.2),     # shutters, awning, roof boxes
+    "metal": (TEX + r"metal\metal_steel_01_co.paa", DATA + "af_metal.rvmat", 2.0),               # entrance door, ladder, plates
+    "vault": (TEX + r"metal\steel_greasy_co.paa", DATA + "af_vault.rvmat", 2.0),                 # vault door
+    "trim": (TEX + r"metal\scratched_industrial_metal_co.paa", DATA + "af_trim.rvmat", 1.5),     # vault fittings, frames
+    # A flat sand colour: the sandy concrete texture made the bags read as stone slabs, and the
+    # game's own sandbag texture is a laid-out sheet that repeats as green crates.
+    "sandbag": ("#(argb,8,8,3)color(0.60,0.52,0.37,1.0,CO)", DATA + "af_sandbag.rvmat", 0.9),
     "paint": ("#(argb,8,8,3)color(0.07,0.07,0.06,1.0,CO)", "", 1.0),
 }
 # What a bullet meets in the fire geometry, per visual material.
-PENETRATION = {"metal": r"dz\data\data\penetration\iron.rvmat", "vault": r"dz\data\data\penetration\armor_3mm_plate.rvmat"}
+IRON = r"dz\data\data\penetration\iron.rvmat"
+PENETRATION = {"metal": IRON, "sheet": IRON, "trim": IRON, "vault": r"dz\data\data\penetration\armor_3mm_plate.rvmat"}
 PENETRATION_DEFAULT = r"dz\data\data\penetration\concrete.rvmat"
-ROADWAY_TEXTURE = r"dz\structures\data\concrete\concretecrude_co.paa"
+ROADWAY_TEXTURE = MATERIALS["floor"][0]
 
 repo = sys.argv[sys.argv.index("--") + 1]
 out_dir = os.path.join(repo, "AFItemPack", "Structures", "CommandPost")
@@ -87,31 +98,38 @@ blend_dir = os.path.join(repo, "tools", "blend")
 os.makedirs(out_dir, exist_ok=True)
 os.makedirs(blend_dir, exist_ok=True)
 p3d.require_addon()
+rng = random.Random(11)   # fixed seed: the same building every build
 
 
 class Piece:
-    """One convex solid: 8 corners (or a prism), a material, and where it is used."""
-    def __init__(self, verts, faces, material, detail, collide, selection):
+    """One convex solid: 8 corners (or a prism), a material, and where it is used.
+    face_materials overrides the material for faces pointing along an axis ("+x", "-z", ...);
+    uv gives a decal its own texture coordinates per corner."""
+    def __init__(self, verts, faces, material, detail, collide, selection, face_materials=None, uv=None):
         self.verts, self.faces, self.material = verts, faces, material
         self.detail, self.collide, self.selection = detail, collide, selection
+        self.face_materials, self.uv = face_materials or {}, uv
 
 
 pieces = []
 walkable = []   # quads (four corners, counter-clockwise seen from above)
 
 
-def box(mn, mx, material, detail=3, collide=True, selection=None):
-    """detail: the box is drawn in visual LODs 1..detail (3 = always, 1 = close up only)."""
+def _box_data(mn, mx):
     x0, y0, z0 = mn
     x1, y1, z1 = mx
-    verts = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0), (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]
-    faces = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
-    pieces.append(Piece(verts, faces, material, detail, collide, selection))
+    return ([(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0), (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)],
+            [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)])
+
+
+def box(mn, mx, material, detail=3, collide=True, selection=None, faces=None):
+    """detail: the box is drawn in visual LODs 1..detail (3 = always, 1 = close up only).
+    faces: other materials for single sides, e.g. {"+y": "interior"}."""
+    pieces.append(Piece(*_box_data(mn, mx), material, detail, collide, selection, faces))
 
 
 def prism(profile, axis, a0, a1, material, detail=3, collide=True, selection=None):
-    """Extrude a convex profile along X or Y. profile: (u, z) points, counter-clockwise when
-    looking along the extrusion axis from a0 toward a1 ... either winding is repaired later."""
+    """Extrude a convex profile along X or Y. profile: (u, z) points in order around it."""
     def at(u, z, a):
         return (a, u, z) if axis == "X" else (u, a, z)
     n = len(profile)
@@ -121,16 +139,31 @@ def prism(profile, axis, a0, a1, material, detail=3, collide=True, selection=Non
     pieces.append(Piece(verts, faces, material, detail, collide, selection))
 
 
-def wall(axis, thick, span, z, material, openings=()):
+def beam(p0, p1, width, material, detail=2, selection=None, height=None):
+    """A straight bar of rectangular section between two points (wires, spokes, braces)."""
+    a, b = Vector(p0), Vector(p1)
+    along = (b - a).normalized()
+    side = along.cross(Vector((0, 0, 1)))
+    if side.length < 1e-4:
+        side = along.cross(Vector((0, 1, 0)))
+    side.normalize()
+    up = side.cross(along).normalized()
+    s, u = side * (width / 2), up * ((height or width) / 2)
+    verts = [tuple(p + ds + du) for p in (a, b) for ds, du in ((-s, -u), (s, -u), (s, u), (-s, u))]
+    faces = [(0, 1, 2, 3), (7, 6, 5, 4), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)]
+    pieces.append(Piece(verts, faces, material, detail, False, selection))
+
+
+def wall(axis, thick, span, z, material, openings=(), faces=None):
     """A straight wall with rectangular openings. axis "X": the wall runs along X, thick is its
     (y0, y1); axis "Y": it runs along Y, thick is its (x0, x1). openings: (start, end, bottom, top)."""
     def piece(a0, a1, z0, z1):
         if a1 - a0 < 1e-6 or z1 - z0 < 1e-6:
             return
         if axis == "X":
-            box((a0, thick[0], z0), (a1, thick[1], z1), material)
+            box((a0, thick[0], z0), (a1, thick[1], z1), material, faces=faces)
         else:
-            box((thick[0], a0, z0), (thick[1], a1, z1), material)
+            box((thick[0], a0, z0), (thick[1], a1, z1), material, faces=faces)
     cursor = span[0]
     for start, end, bottom, top in sorted(openings):
         piece(cursor, start, z[0], z[1])
@@ -143,103 +176,135 @@ def wall(axis, thick, span, z, material, openings=()):
 # ---- the building ----------------------------------------------------------------------
 W, L = HALF_W, HALF_L
 win = WINDOW_Z
+b_out, b_top = BATTER
+R = ROOF_OVERHANG
+P = PARAPET_THICK
 # Foundation and floor.
-box((-W, -L, FOUNDATION), (W, L, FLOOR), "concrete")
+box((-W, -L, FOUNDATION), (W, L, FLOOR), "bunker", faces={"+z": "floor"})
 walkable.append(((-W, -L, FLOOR), (W, -L, FLOOR), (W, L, FLOOR), (-W, L, FLOOR)))
 # Command room: front wall with the entrance and two slit windows, two side walls with two each.
-wall("X", (-L, -L + WALL), (-W, W), (FLOOR, CEILING), "plaster",
-     [(x0, x1, win[0], win[1]) for x0, x1 in FRONT_WINDOWS_X] + [(DOOR_X[0], DOOR_X[1], FLOOR, DOOR_TOP)])
+wall("X", (-L, -L + WALL), (-W, W), (FLOOR, CEILING), "wall",
+     [(x0, x1, win[0], win[1]) for x0, x1 in FRONT_WINDOWS_X] + [(DOOR_X[0], DOOR_X[1], FLOOR, DOOR_TOP)],
+     faces={"+y": "interior"})
 side_windows = [(y0, y1, win[0], win[1]) for y0, y1 in SIDE_WINDOWS_Y]
-wall("Y", (-W, -W + WALL), (-L + WALL, DIVIDE_Y[0]), (FLOOR, CEILING), "plaster", side_windows)
-wall("Y", (W - WALL, W), (-L + WALL, DIVIDE_Y[0]), (FLOOR, CEILING), "plaster", side_windows)
+wall("Y", (-W, -W + WALL), (-L + WALL, DIVIDE_Y[0]), (FLOOR, CEILING), "wall", side_windows, faces={"+x": "interior"})
+wall("Y", (W - WALL, W), (-L + WALL, DIVIDE_Y[0]), (FLOOR, CEILING), "wall", side_windows, faces={"-x": "interior"})
 # Panic room: thick windowless walls, and the dividing wall with the vault opening.
-wall("Y", (-W, -W + VAULT_WALL), (DIVIDE_Y[0], L), (FLOOR, CEILING), "concrete")
-wall("Y", (W - VAULT_WALL, W), (DIVIDE_Y[0], L), (FLOOR, CEILING), "concrete")
-wall("X", (L - VAULT_WALL, L), (-W + VAULT_WALL, W - VAULT_WALL), (FLOOR, CEILING), "concrete")
-wall("X", DIVIDE_Y, (-W + VAULT_WALL, W - VAULT_WALL), (FLOOR, CEILING), "concrete",
-     [(VAULT_X[0], VAULT_X[1], FLOOR, VAULT_TOP)])
-# Roof slab, parapet, sandbags.
-R = ROOF_OVERHANG
-box((-W - R, -L - R, CEILING), (W + R, L + R, ROOF_TOP), "concrete")
+wall("Y", (-W, -W + VAULT_WALL), (DIVIDE_Y[0], L), (FLOOR, CEILING), "bunker", faces={"+x": "cinder"})
+wall("Y", (W - VAULT_WALL, W), (DIVIDE_Y[0], L), (FLOOR, CEILING), "bunker", faces={"-x": "cinder"})
+wall("X", (L - VAULT_WALL, L), (-W + VAULT_WALL, W - VAULT_WALL), (FLOOR, CEILING), "bunker", faces={"-y": "cinder"})
+wall("X", DIVIDE_Y, (-W + VAULT_WALL, W - VAULT_WALL), (FLOOR, CEILING), "bunker",
+     [(VAULT_X[0], VAULT_X[1], FLOOR, VAULT_TOP)], faces={"+y": "cinder"})
+# Roof slab and parapet.
+box((-W - R, -L - R, CEILING), (W + R, L + R, ROOF_TOP), "concrete", faces={"+z": "roof"})
 walkable.append(((-W - R, -L - R, ROOF_TOP), (W + R, -L - R, ROOF_TOP), (W + R, L + R, ROOF_TOP), (-W - R, L + R, ROOF_TOP)))
-P = PARAPET_THICK
-box((-W - R, -L - R, ROOF_TOP), (W + R, -L - R + P, PARAPET_TOP), "concrete")
-box((-W - R, L + R - P, ROOF_TOP), (LADDER_GAP_X[0], L + R, PARAPET_TOP), "concrete")   # back, with an
-box((LADDER_GAP_X[1], L + R - P, ROOF_TOP), (W + R, L + R, PARAPET_TOP), "concrete")    # opening for the ladder
-box((-W - R, -L - R + P, ROOF_TOP), (-W - R + P, L + R - P, PARAPET_TOP), "concrete")
-box((W + R - P, -L - R + P, ROOF_TOP), (W + R, L + R - P, PARAPET_TOP), "concrete")
+box((-W - R, -L - R, ROOF_TOP), (W + R, -L - R + P, PARAPET_TOP), "bunker")
+box((-W - R, L + R - P, ROOF_TOP), (LADDER_GAP_X[0], L + R, PARAPET_TOP), "bunker")   # back, with an
+box((LADDER_GAP_X[1], L + R - P, ROOF_TOP), (W + R, L + R, PARAPET_TOP), "bunker")    # opening for the ladder
+box((-W - R, -L - R + P, ROOF_TOP), (-W - R + P, L + R - P, PARAPET_TOP), "bunker")
+box((W + R - P, -L - R + P, ROOF_TOP), (W + R, L + R - P, PARAPET_TOP), "bunker")
 
 
 def sandbag_row(start, direction, count, base_z, layers=2):
-    """Sandbags laid end to end on the parapet; close up each bag is its own box."""
-    length, width, height = 0.62, 0.34, 0.17
+    """Sandbags laid end to end on the parapet. Close up each bag is its own six-sided sack,
+    a little uneven; further away (and for collision) one plain block stands in for the row."""
+    length, width, height, c = 0.62, 0.36, 0.17, 0.07
     dx, dy = direction
     for layer in range(layers):
         for k in range(count - layer):
-            along = (k + 0.5 * layer) * length
-            cx, cy = start[0] + dx * along, start[1] + dy * along
-            hx, hy = (length * 0.47, width / 2) if dx else (width / 2, length * 0.47)
+            along = (k + 0.5 * layer) * length + rng.uniform(-0.02, 0.02)
+            shift = rng.uniform(-0.025, 0.025)
             z0 = base_z + layer * height
-            box((cx, cy, z0), (cx + 2 * hx, cy + 2 * hy, z0 + height), "sandbag", detail=1, collide=False)
-    # One plain block stands in for the row further away and for collision.
+            z1 = z0 + height + rng.uniform(-0.01, 0.015)
+            a0 = (start[0] if dx else start[1]) + along + 0.015
+            u0 = (start[1] if dx else start[0]) + shift
+            profile = [(u0 + c, z0), (u0 + width - c, z0), (u0 + width, (z0 + z1) / 2),
+                       (u0 + width - c, z1), (u0 + c, z1), (u0, (z0 + z1) / 2)]
+            prism(profile, "X" if dx else "Y", a0, a0 + length - 0.03, "sandbag", detail=1, collide=False)
     ex, ey = (count * length, width) if dx else (width, count * length)
     pieces.append(Piece(*_box_data((start[0], start[1], base_z), (start[0] + ex, start[1] + ey, base_z + layers * height)),
                         "sandbag", -2, True, None))
 
 
-def _box_data(mn, mx):
-    x0, y0, z0 = mn
-    x1, y1, z1 = mx
-    return ([(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0), (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)],
-            [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)])
-
-
-sandbag_row((-W - R, -L - R - 0.02, PARAPET_TOP), (1, 0), 5, PARAPET_TOP)
-sandbag_row((W + R - 3.1, -L - R - 0.02, PARAPET_TOP), (1, 0), 5, PARAPET_TOP)
-sandbag_row((-W - R - 0.02, -L - R + 0.4, PARAPET_TOP), (0, 1), 4, PARAPET_TOP)
-sandbag_row((W + R - 0.32, 1.5, PARAPET_TOP), (0, 1), 6, PARAPET_TOP)
-sandbag_row((-W - R, L + R - 0.32, PARAPET_TOP), (1, 0), 6, PARAPET_TOP)
+sandbag_row((-W - R, -L - R - 0.03, PARAPET_TOP), (1, 0), 5, PARAPET_TOP)
+sandbag_row((W + R - 3.1, -L - R - 0.03, PARAPET_TOP), (1, 0), 5, PARAPET_TOP, layers=3)
+sandbag_row((-W - R - 0.03, -L - R + 0.4, PARAPET_TOP), (0, 1), 4, PARAPET_TOP)
+sandbag_row((W + R - 0.33, 1.5, PARAPET_TOP), (0, 1), 6, PARAPET_TOP)
+sandbag_row((-W - R, L + R - 0.33, PARAPET_TOP), (1, 0), 6, PARAPET_TOP)
 
 # Sloped wall base, left open at the entrance.
-b_out, b_top = BATTER
-prism([(-L - b_out, 0.0), (-L, 0.0), (-L, b_top)], "X", -W - b_out, DOOR_X[0] - 0.25, "plaster")
-prism([(-L - b_out, 0.0), (-L, 0.0), (-L, b_top)], "X", DOOR_X[1] + 0.25, W + b_out, "plaster")
-prism([(L, 0.0), (L + b_out, 0.0), (L, b_top)], "X", -W - b_out, W + b_out, "concrete")
-prism([(-W - b_out, 0.0), (-W, 0.0), (-W, b_top)], "Y", -L, DIVIDE_Y[0], "plaster")
-prism([(W, 0.0), (W + b_out, 0.0), (W, b_top)], "Y", -L, DIVIDE_Y[0], "plaster")
-prism([(-W - b_out, 0.0), (-W, 0.0), (-W, b_top)], "Y", DIVIDE_Y[0], L, "concrete")
-prism([(W, 0.0), (W + b_out, 0.0), (W, b_top)], "Y", DIVIDE_Y[0], L, "concrete")
+prism([(-L - b_out, 0.0), (-L, 0.0), (-L, b_top)], "X", -W - b_out, DOOR_X[0] - 0.25, "wall")
+prism([(-L - b_out, 0.0), (-L, 0.0), (-L, b_top)], "X", DOOR_X[1] + 0.25, W + b_out, "wall")
+prism([(L, 0.0), (L + b_out, 0.0), (L, b_top)], "X", -W - b_out, W + b_out, "bunker")
+prism([(-W - b_out, 0.0), (-W, 0.0), (-W, b_top)], "Y", -L, DIVIDE_Y[0], "wall")
+prism([(W, 0.0), (W + b_out, 0.0), (W, b_top)], "Y", -L, DIVIDE_Y[0], "wall")
+prism([(-W - b_out, 0.0), (-W, 0.0), (-W, b_top)], "Y", DIVIDE_Y[0], L, "bunker")
+prism([(W, 0.0), (W + b_out, 0.0), (W, b_top)], "Y", DIVIDE_Y[0], L, "bunker")
 # Entrance step.
-box((DOOR_X[0] - 0.25, -L - 0.7, FOUNDATION), (DOOR_X[1] + 0.25, -L, FLOOR), "concrete")
+box((DOOR_X[0] - 0.25, -L - 0.7, FOUNDATION), (DOOR_X[1] + 0.25, -L, FLOOR), "bunker", faces={"+z": "floor"})
 walkable.append(((DOOR_X[0] - 0.25, -L - 0.7, FLOOR), (DOOR_X[1] + 0.25, -L - 0.7, FLOOR), (DOOR_X[1] + 0.25, -L, FLOOR), (DOOR_X[0] - 0.25, -L, FLOOR)))
 
-# Corrugated awning over the entrance.
-prism([(-L - 1.0, 2.38), (-L - 1.0, 2.35), (-L, 2.62), (-L, 2.65)], "X", DOOR_X[0] - 0.4, DOOR_X[1] + 0.4, "metal", detail=3, collide=False)
-for x in (DOOR_X[0] - 0.35, DOOR_X[1] + 0.31):
-    prism([(-L - 0.9, 2.36), (-L, 2.05), (-L, 2.10), (-L - 0.86, 2.40)], "X", x, x + 0.04, "metal", detail=1, collide=False)
-# Window shutters, swung open against the wall, and steel frames in the window reveals.
+# Entrance: steel frame, concrete lintel, corrugated awning on braces, a caged lamp and its conduit.
+for x0, x1 in ((DOOR_X[0] - 0.07, DOOR_X[0]), (DOOR_X[1], DOOR_X[1] + 0.07)):
+    box((x0, -L - 0.03, FLOOR), (x1, -L + 0.12, DOOR_TOP + 0.07), "trim", detail=2, collide=False)
+box((DOOR_X[0], -L - 0.03, DOOR_TOP), (DOOR_X[1], -L + 0.12, DOOR_TOP + 0.07), "trim", detail=2, collide=False)
+box((DOOR_X[0] - 0.3, -L - 0.05, DOOR_TOP + 0.07), (DOOR_X[1] + 0.3, -L, DOOR_TOP + 0.27), "concrete", detail=2, collide=False)
+prism([(-L - 1.0, 2.50), (-L - 1.0, 2.47), (-L, 2.74), (-L, 2.77)], "X", DOOR_X[0] - 0.4, DOOR_X[1] + 0.4, "sheet", detail=3, collide=False)
+for x in (DOOR_X[0] - 0.33, DOOR_X[1] + 0.33):
+    beam((x, -L - 0.92, 2.49), (x, -L - 0.02, 2.15), 0.035, "metal", detail=1)
+    beam((x, -L - 0.98, 2.47), (x, -L - 0.02, 2.73), 0.035, "metal", detail=1)
+lamp_x = DOOR_X[1] + 0.55
+box((lamp_x - 0.07, -L - 0.16, 2.30), (lamp_x + 0.07, -L, 2.36), "trim", detail=1, collide=False)
+box((lamp_x - 0.06, -L - 0.15, 2.14), (lamp_x + 0.06, -L - 0.03, 2.30), "paint", detail=1, collide=False)
+box((lamp_x - 0.015, -L - 0.03, 2.36), (lamp_x + 0.015, -L, CEILING), "trim", detail=1, collide=False)
+# Windows: steel shutters swung open against the wall, bars in the opening, a sill under it.
 for x0, x1 in FRONT_WINDOWS_X:
-    box((x0 - 0.47, -L - 0.03, win[0] - 0.03), (x0 - 0.02, -L, win[1] + 0.03), "metal", detail=2, collide=False)
-    box((x1 + 0.02, -L - 0.03, win[0] - 0.03), (x1 + 0.47, -L, win[1] + 0.03), "metal", detail=2, collide=False)
+    box((x0 - 0.47, -L - 0.03, win[0] - 0.03), (x0 - 0.02, -L, win[1] + 0.03), "sheet", detail=2, collide=False)
+    box((x1 + 0.02, -L - 0.03, win[0] - 0.03), (x1 + 0.47, -L, win[1] + 0.03), "sheet", detail=2, collide=False)
+    box((x0 - 0.06, -L - 0.06, win[0] - 0.07), (x1 + 0.06, -L, win[0]), "concrete", detail=2, collide=False)
+    for k in range(1, 4):
+        x = x0 + (x1 - x0) * k / 4
+        box((x - 0.01, -L + 0.16, win[0]), (x + 0.01, -L + 0.18, win[1]), "trim", detail=1, collide=False)
 for side in (-1, 1):
     for y0, y1 in SIDE_WINDOWS_Y:
         xa, xb = (-W - 0.03, -W) if side < 0 else (W, W + 0.03)
-        box((xa, y0 - 0.47, win[0] - 0.03), (xb, y0 - 0.02, win[1] + 0.03), "metal", detail=2, collide=False)
-        box((xa, y1 + 0.02, win[0] - 0.03), (xb, y1 + 0.47, win[1] + 0.03), "metal", detail=2, collide=False)
-# Steel plates on the panic room's outside corners and wall middles.
+        box((xa, y0 - 0.47, win[0] - 0.03), (xb, y0 - 0.02, win[1] + 0.03), "sheet", detail=2, collide=False)
+        box((xa, y1 + 0.02, win[0] - 0.03), (xb, y1 + 0.47, win[1] + 0.03), "sheet", detail=2, collide=False)
+        sa, sb = (-W - 0.06, -W) if side < 0 else (W, W + 0.06)
+        box((sa, y0 - 0.06, win[0] - 0.07), (sb, y1 + 0.06, win[0]), "concrete", detail=2, collide=False)
+        bx = side * (W - 0.17)
+        for k in range(1, 4):
+            y = y0 + (y1 - y0) * k / 4
+            box((bx - 0.01, y - 0.01, win[0]), (bx + 0.01, y + 0.01, win[1]), "trim", detail=1, collide=False)
+# Steel plates on the panic room's outside corners and wall middles, with bolt heads.
 for y in (DIVIDE_Y[0] + 0.1, 3.0, L - 0.7):
     for xa, xb in ((-W - 0.025, -W), (W, W + 0.025)):
         box((xa, y, b_top + 0.05), (xb, y + 0.6, CEILING - 0.05), "metal", detail=2, collide=False)
+        for z in (b_top + 0.25, 1.75, CEILING - 0.25):
+            for by in (y + 0.08, y + 0.47):
+                bolt_x = (xa - 0.012, xa) if xa < 0 else (xb, xb + 0.012)
+                box((bolt_x[0], by, z), (bolt_x[1], by + 0.05, z + 0.05), "trim", detail=1, collide=False)
 for x in (-W + 0.1, -0.3, W - 0.7):
     box((x, L, b_top + 0.05), (x + 0.6, L + 0.025, CEILING - 0.05), "metal", detail=2, collide=False)
-# Steel lining of the vault opening.
-vy0, vy1 = DIVIDE_Y
-box((VAULT_X[0] - 0.05, vy0 - 0.02, FLOOR), (VAULT_X[0], vy1 + 0.02, VAULT_TOP + 0.05), "vault", detail=2, collide=False)
-box((VAULT_X[1], vy0 - 0.02, FLOOR), (VAULT_X[1] + 0.05, vy1 + 0.02, VAULT_TOP + 0.05), "vault", detail=2, collide=False)
-box((VAULT_X[0], vy0 - 0.02, VAULT_TOP), (VAULT_X[1], vy1 + 0.02, VAULT_TOP + 0.05), "vault", detail=2, collide=False)
-# Antenna mast and the (for now decorative) ladder up the back wall.
-box((-2.6, 4.0, ROOF_TOP), (-2.3, 4.3, ROOF_TOP + 0.25), "concrete", detail=2, collide=False)
-box((-2.49, 4.11, ROOF_TOP + 0.25), (-2.41, 4.19, ROOF_TOP + 5.5), "metal", detail=3, collide=False)
+    for z in (b_top + 0.25, 1.75, CEILING - 0.25):
+        for bx in (x + 0.08, x + 0.47):
+            box((bx, L + 0.025, z), (bx + 0.05, L + 0.037, z + 0.05), "trim", detail=1, collide=False)
+# Roof: antenna mast with guy wires, a vent, a cooling unit and a cable run.
+mast = (-2.45, 4.15)
+box((mast[0] - 0.15, mast[1] - 0.15, ROOF_TOP), (mast[0] + 0.15, mast[1] + 0.15, ROOF_TOP + 0.25), "concrete", detail=2, collide=False)
+box((mast[0] - 0.04, mast[1] - 0.04, ROOF_TOP + 0.25), (mast[0] + 0.04, mast[1] + 0.04, ROOF_TOP + 5.5), "metal", detail=3, collide=False)
+for k in range(3):   # cross arms near the top
+    z = ROOF_TOP + 4.3 + 0.4 * k
+    box((mast[0] - 0.35 + 0.08 * k, mast[1] - 0.012, z), (mast[0] + 0.35 - 0.08 * k, mast[1] + 0.012, z + 0.024), "trim", detail=1, collide=False)
+for gx, gy in ((-W - R + 0.2, L + R - 0.2), (-W - R + 0.2, 0.6), (0.4, L + R - 0.2)):
+    beam((mast[0], mast[1], ROOF_TOP + 3.9), (gx, gy, PARAPET_TOP), 0.012, "trim", detail=1)
+box((1.2, -3.4, ROOF_TOP), (1.75, -2.85, ROOF_TOP + 0.45), "sheet", detail=2, collide=True)
+box((1.15, -3.45, ROOF_TOP + 0.45), (1.80, -2.80, ROOF_TOP + 0.50), "trim", detail=2, collide=False)
+box((-1.6, 0.9, ROOF_TOP + 0.12), (-0.6, 1.4, ROOF_TOP + 0.72), "sheet", detail=2, collide=True)
+for lx, ly in ((-1.55, 0.95), (-0.7, 0.95), (-1.55, 1.3), (-0.7, 1.3)):
+    box((lx, ly, ROOF_TOP), (lx + 0.05, ly + 0.05, ROOF_TOP + 0.12), "trim", detail=1, collide=False)
+box((mast[0] - 0.02, -L - R + P, ROOF_TOP), (mast[0] + 0.02, mast[1] - 0.15, ROOF_TOP + 0.04), "trim", detail=1, collide=False)
+# Roof ladder up the back wall.
 for x in (LADDER_X - 0.25, LADDER_X + 0.21):
     box((x, LADDER_Y - 0.02, 0.0), (x + 0.04, LADDER_Y + 0.02, ROOF_TOP + 1.1), "metal", detail=2, collide=False)
     # handrail from the ladder onto the roof
@@ -272,24 +337,60 @@ stroke([(2.75, az0), (2.75 + t, az0), (2.75 + t, az1), (2.75, az1)])            
 stroke([(2.75 + t, az1 - t), (3.45, az1 - t), (3.45, az1), (2.75 + t, az1)])              # F, top bar
 stroke([(2.75 + t, 1.68), (3.25, 1.68), (3.25, 1.68 + t * 0.8), (2.75 + t, 1.68 + t * 0.8)])  # F, middle bar
 
-# Doors. The entrance door hangs in the opening; the vault door is a thick slab that seats
-# against the command-room face of the dividing wall, with a spoked wheel.
+# ---- doors -----------------------------------------------------------------------------
+# Entrance door: a steel leaf in the opening with stiffening bands, a viewing slit and a handle.
 DOOR1_HINGE = (DOOR_X[0], -L + 0.06)
-box((DOOR_X[0], -L + 0.03, FLOOR), (DOOR_X[1], -L + 0.09, DOOR_TOP), "metal", selection="doors1")
-box((DOOR_X[1] - 0.16, -L - 0.02, FLOOR + 1.0), (DOOR_X[1] - 0.06, -L + 0.14, FLOOR + 1.06), "vault", detail=2, collide=False, selection="doors1")
+dy0, dy1 = -L + 0.03, -L + 0.09
+box((DOOR_X[0], dy0, FLOOR), (DOOR_X[1], dy1, DOOR_TOP), "metal", selection="doors1")
+for z in (FLOOR + 0.25, FLOOR + 1.0, FLOOR + 1.85):
+    box((DOOR_X[0] + 0.03, dy0 - 0.012, z), (DOOR_X[1] - 0.03, dy0, z + 0.07), "trim", detail=2, collide=False, selection="doors1")
+box((DOOR_X[0] + 0.33, dy0 - 0.006, FLOOR + 1.50), (DOOR_X[1] - 0.33, dy0, FLOOR + 1.58), "paint", detail=1, collide=False, selection="doors1")
+box((DOOR_X[1] - 0.16, dy0 - 0.05, FLOOR + 1.0), (DOOR_X[1] - 0.06, dy1 + 0.05, FLOOR + 1.06), "trim", detail=2, collide=False, selection="doors1")
+
+# Vault door: a thick slab that seats against the command-room face of the dividing wall, with a
+# raised centre panel, a ring of bolt heads, two locking bars and a spoked wheel. Around it on the
+# wall, a steel surround; in the opening, a steel lining.
 VAULT_SLAB_X = (VAULT_X[0] - 0.12, VAULT_X[1] + 0.12)
 VAULT_SLAB_Y = (DIVIDE_Y[0] - 0.18, DIVIDE_Y[0])
+VAULT_SLAB_Z = (FLOOR + 0.02, VAULT_TOP + 0.12)
 DOOR2_HINGE = (VAULT_SLAB_X[0], VAULT_SLAB_Y[0] + 0.02)
-box((VAULT_SLAB_X[0], VAULT_SLAB_Y[0], FLOOR + 0.02), (VAULT_SLAB_X[1], VAULT_SLAB_Y[1], VAULT_TOP + 0.12), "vault", selection="doors2")
+sx0, sx1 = VAULT_SLAB_X
+sy0, sy1 = VAULT_SLAB_Y
+sz0, sz1 = VAULT_SLAB_Z
+box((sx0, sy0, sz0), (sx1, sy1, sz1), "vault", selection="doors2")
+box((sx0 + 0.14, sy0 - 0.03, sz0 + 0.14), (sx1 - 0.14, sy0, sz1 - 0.14), "trim", detail=2, collide=False, selection="doors2")
+for k in range(7):   # bolt heads up both sides
+    z = sz0 + 0.12 + k * (sz1 - sz0 - 0.29) / 6
+    for x in (sx0 + 0.04, sx1 - 0.09):
+        box((x, sy0 - 0.02, z), (x + 0.05, sy0, z + 0.05), "trim", detail=1, collide=False, selection="doors2")
+for k in range(5):   # and along the top and bottom
+    x = sx0 + 0.22 + k * (sx1 - sx0 - 0.49) / 4
+    for z in (sz0 + 0.04, sz1 - 0.09):
+        box((x, sy0 - 0.02, z), (x + 0.05, sy0, z + 0.05), "trim", detail=1, collide=False, selection="doors2")
+for z in (sz0 + 0.42, sz1 - 0.48):   # locking bars with keepers at the latch side
+    box((sx0 + 0.10, sy0 - 0.07, z), (sx1 - 0.02, sy0 - 0.03, z + 0.07), "metal", detail=2, collide=False, selection="doors2")
+    box((sx1 - 0.14, sy0 - 0.09, z - 0.03), (sx1 - 0.06, sy0 - 0.03, z + 0.10), "trim", detail=1, collide=False, selection="doors2")
 wheel_c = ((VAULT_X[0] + VAULT_X[1]) / 2, FLOOR + 1.15)
-wheel = [(wheel_c[0] + 0.30 * math.cos(math.radians(a)), wheel_c[1] + 0.30 * math.sin(math.radians(a))) for a in range(0, 360, 45)]
-wy = (VAULT_SLAB_Y[0] - 0.07, VAULT_SLAB_Y[0] - 0.03)
-verts = [(x, wy[0], z) for x, z in wheel] + [(x, wy[1], z) for x, z in wheel]
-faces = [tuple(range(7, -1, -1)), tuple(range(8, 16))] + [(k, (k + 1) % 8, 8 + (k + 1) % 8, 8 + k) for k in range(8)]
-pieces.append(Piece(verts, faces, "metal", 2, False, "doors2"))
-box((wheel_c[0] - 0.04, VAULT_SLAB_Y[0] - 0.03, wheel_c[1] - 0.04), (wheel_c[0] + 0.04, VAULT_SLAB_Y[0], wheel_c[1] + 0.04), "metal", detail=2, collide=False, selection="doors2")
-for z in (FLOOR + 0.35, FLOOR + 1.85):   # hinge blocks
-    box((VAULT_SLAB_X[0] - 0.08, VAULT_SLAB_Y[0], z), (VAULT_SLAB_X[0], VAULT_SLAB_Y[1], z + 0.22), "metal", detail=2, collide=False)
+wheel_y = sy0 - 0.13
+box((wheel_c[0] - 0.035, wheel_y, wheel_c[1] - 0.035), (wheel_c[0] + 0.035, sy0 - 0.03, wheel_c[1] + 0.035), "trim", detail=2, collide=False, selection="doors2")
+box((wheel_c[0] - 0.07, wheel_y - 0.02, wheel_c[1] - 0.07), (wheel_c[0] + 0.07, wheel_y + 0.02, wheel_c[1] + 0.07), "metal", detail=2, collide=False, selection="doors2")
+rim = [(wheel_c[0] + 0.27 * math.cos(math.radians(a)), wheel_y, wheel_c[1] + 0.27 * math.sin(math.radians(a))) for a in range(0, 360, 30)]
+for k in range(12):
+    beam(rim[k], rim[(k + 1) % 12], 0.04, "metal", detail=2, selection="doors2")
+for a in (0, 45, 90, 135):
+    ca, sa_ = 0.27 * math.cos(math.radians(a)), 0.27 * math.sin(math.radians(a))
+    beam((wheel_c[0] - ca, wheel_y, wheel_c[1] - sa_), (wheel_c[0] + ca, wheel_y, wheel_c[1] + sa_), 0.03, "trim", detail=2, selection="doors2")
+for z in (FLOOR + 0.30, FLOOR + 1.80):   # hinge barrels on the wall
+    box((sx0 - 0.10, sy0 - 0.02, z), (sx0, sy1, z + 0.28), "metal", detail=2, collide=False)
+    box((sx0 - 0.07, sy0 - 0.05, z + 0.04), (sx0 + 0.10, sy0 - 0.02, z + 0.24), "trim", detail=1, collide=False, selection="doors2")
+# Steel surround on the wall (top and latch side; the hinges take the other side).
+box((sx1, sy1 - 0.03, FLOOR), (sx1 + 0.12, sy1, sz1 + 0.12), "trim", detail=2, collide=False)
+box((sx0 - 0.10, sy1 - 0.03, sz1), (sx1 + 0.12, sy1, sz1 + 0.12), "trim", detail=2, collide=False)
+# Steel lining of the opening.
+vy0, vy1 = DIVIDE_Y
+box((VAULT_X[0] - 0.05, vy0 + 0.001, FLOOR), (VAULT_X[0], vy1 + 0.02, VAULT_TOP + 0.05), "vault", detail=2, collide=False)
+box((VAULT_X[1], vy0 + 0.001, FLOOR), (VAULT_X[1] + 0.05, vy1 + 0.02, VAULT_TOP + 0.05), "vault", detail=2, collide=False)
+box((VAULT_X[0], vy0 + 0.001, VAULT_TOP), (VAULT_X[1], vy1 + 0.02, VAULT_TOP + 0.05), "vault", detail=2, collide=False)
 
 
 # ---- meshes ------------------------------------------------------------------------------
@@ -322,20 +423,29 @@ def build(name, chosen, textured=True, fire=False, components=False):
             groups.setdefault("Component%02d" % number, []).extend(indices)
         if piece.selection:
             groups.setdefault(piece.selection, []).extend(indices)
-        key = piece.material if textured else ("fire_" + piece.material if fire else "plain")
-        if key not in slots:
-            slots.append(key)
-        tile = MATERIALS[piece.material][2]
         for face in outward(piece):
             pts = [Vector(piece.verts[i]) for i in face]
             normal = (pts[1] - pts[0]).cross(pts[2] - pts[0]).normalized()
-            if abs(normal.z) > 0.7:
+            # Which way the face points decides its material (walls differ inside and out).
+            axis = max(range(3), key=lambda a: abs(normal[a]))
+            direction = ("+" if normal[axis] > 0 else "-") + "xyz"[axis]
+            material = piece.face_materials.get(direction, piece.material)
+            key = material if textured else ("fire_" + piece.material if fire else "plain")
+            if key not in slots:
+                slots.append(key)
+            spec = MATERIALS[material]
+            tile = spec[2]
+            if piece.uv:
+                face_uv = [piece.uv[i] for i in face]
+            elif axis == 2:
                 face_uv = [(p.x / tile, p.y / tile) for p in pts]
-            elif abs(normal.x) > abs(normal.y):
-                face_uv = [(p.y / tile, p.z / tile) for p in pts]
             else:
-                face_uv = [(p.x / tile, p.z / tile) for p in pts]
-            # P3D faces have at most four corners: larger ones (the vault wheel) become fans.
+                across = [p.y if axis == 0 else p.x for p in pts]
+                if len(spec) > 3 and spec[3]:   # the texture is one wall high: floor at the bottom, ceiling at the top
+                    face_uv = [(a / tile, (p.z - FLOOR) / (CEILING - FLOOR)) for a, p in zip(across, pts)]
+                else:
+                    face_uv = [(a / tile, p.z / tile) for a, p in zip(across, pts)]
+            # P3D faces have at most four corners: larger ones become fans of triangles.
             corners = list(range(len(face)))
             parts = [corners] if len(face) <= 4 else [[0, k, k + 1] for k in range(1, len(face) - 1)]
             for part in parts:

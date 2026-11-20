@@ -12,7 +12,7 @@ PixelShaderID="Super";
 VertexShaderID="Super";
 class Stage1
 {
-	texture="dz\structures\data\metal\rotfurnace_metal_01_nohq.paa";
+	texture="dz\structures_takistan\data\metal\steel_greasy_nohq.paa";
 	uvSource="tex";
 	class uvTransform
 	{
