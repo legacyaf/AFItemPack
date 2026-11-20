@@ -5,3 +5,6 @@ models/**/*.fbx
 !models/**/lowpoly/*.glb
 # Leftovers of an interrupted P3D export
 *.p3d.*.temp
+
+# The AF Industries Content Factory has its own private repository
+AF-Content-Factory/
