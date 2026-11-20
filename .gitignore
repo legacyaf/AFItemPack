@@ -8,5 +8,3 @@ models/**/*.fbx
 
 # The AF Industries Content Factory has its own private repository
 AF-Content-Factory/
-# A separate project that lives in this folder on the owner's PC; not part of the item pack
-AF-Content-Factory/
