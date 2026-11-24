@@ -8,3 +8,6 @@ models/**/*.fbx
 
 # The AF Industries Content Factory has its own private repository
 AF-Content-Factory/
+# Content Factory database backups and notes that its sessions leave in this folder
+AF-Factory-backups/
+fp-before.txt
